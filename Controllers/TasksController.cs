@@ -35,7 +35,14 @@ namespace EmployeeMvc.Controllers
         {
             var query = _context.Tasks.Include(t => t.Employee).AsQueryable();
 
-            if (!IsStaff)
+            if (User.IsInRole(AppRoles.Admin))
+            {
+                var adminEmployeeIds = _context.Employees
+                    .ScopeToAdminGroups(_context, User)
+                    .Select(e => e.Id);
+                query = query.Where(t => adminEmployeeIds.Contains(t.EmployeeId));
+            }
+            else if (!IsStaff)
             {
                 // Employee ხედავს მხოლოდ საკუთარ დავალებებს.
                 var me = await _currentEmployee.GetAsync(User);
@@ -50,7 +57,7 @@ namespace EmployeeMvc.Controllers
             return View(tasks);
         }
 
-        // დავალების მინიჭება: Admin და Manager.
+        // Admin assigns only within owned groups; Manager keeps the existing broad access.
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = AppRoles.AdminOrManager)]
@@ -64,6 +71,12 @@ namespace EmployeeMvc.Controllers
 
             var employee = await _context.Employees.FindAsync(employeeId);
             if (employee == null) return NotFound();
+
+            if (User.IsInRole(AppRoles.Admin) &&
+                !await _context.Employees.ScopeToAdminGroups(_context, User).AnyAsync(e => e.Id == employeeId))
+            {
+                return Forbid();
+            }
 
             var task = new TaskItem
             {
@@ -100,6 +113,12 @@ namespace EmployeeMvc.Controllers
             var task = await _context.Tasks.FindAsync(id);
             if (task == null) return NotFound();
 
+            if (User.IsInRole(AppRoles.Admin) &&
+                !await _context.Employees.ScopeToAdminGroups(_context, User).AnyAsync(e => e.Id == task.EmployeeId))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             // Admin/Manager ცვლის ნებისმიერს; დანარჩენი — მხოლოდ საკუთარ დავალებას.
             // StatusCode(403) განზრახ: Forbid() redirect-ს გააკეთებდა და fetch() ამას წარმატებად აღიქვამდა.
             if (!CanManageAll)
@@ -125,6 +144,12 @@ namespace EmployeeMvc.Controllers
             var task = await _context.Tasks.FindAsync(id);
             if (task != null)
             {
+                if (User.IsInRole(AppRoles.Admin) &&
+                    !await _context.Employees.ScopeToAdminGroups(_context, User).AnyAsync(e => e.Id == task.EmployeeId))
+                {
+                    return Forbid();
+                }
+
                 _context.Tasks.Remove(task);
                 await _context.SaveChangesAsync();
             }

@@ -6,6 +6,11 @@
 
 <h1>ახალი ჯგუფი</h1>
 
+@if (TempData["TaskError"] != null)
+{
+    <div class="alert alert-warning">@TempData["TaskError"]</div>
+}
+
 <div class="form-panel">
     <partial name="_GroupForm" model="Model" />
 </div>

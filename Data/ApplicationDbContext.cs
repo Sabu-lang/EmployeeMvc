@@ -29,6 +29,10 @@ namespace EmployeeMvc.Data
                 .HasForeignKey(t => t.EmployeeId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Employee>()
+                .HasIndex(e => e.AccountId)
+                .IsUnique();
+
             // Groups: მფლობელი — Restrict (SQL Server-ში multiple cascade paths-ის თავიდან ასაცილებლად).
             modelBuilder.Entity<Group>(entity =>
             {

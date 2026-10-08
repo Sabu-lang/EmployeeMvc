@@ -29,13 +29,17 @@ namespace EmployeeMvc.Controllers
         private bool IsAdmin => User.IsInRole(AppRoles.Admin);
 
         // ---------- სია ----------
-        // Admin: ყველა ჯგუფი. დანარჩენი: მხოლოდ ის ჯგუფები, სადაც მფლობელია ან წევრი.
+        // Admin sees owned groups; other users see groups they own or belong to.
         public async Task<IActionResult> Index()
         {
             var userId = _userManager.GetUserId(User)!;
 
             var query = _context.Groups.AsNoTracking().AsQueryable();
-            if (!IsAdmin)
+            if (IsAdmin)
+            {
+                query = query.Where(g => g.OwnerId == userId);
+            }
+            else
             {
                 query = query.Where(g => g.OwnerId == userId || g.Members.Any(m => m.UserId == userId));
             }
@@ -112,8 +116,23 @@ namespace EmployeeMvc.Controllers
 
             if (canManage)
             {
-                var candidates = await _userManager.Users
-                    .Where(u => u.Id != group.OwnerId && !memberIds.Contains(u.Id))
+                var candidatesQuery = _userManager.Users
+                    .Where(u => u.Id != group.OwnerId && !memberIds.Contains(u.Id));
+
+                if (IsAdmin)
+                {
+                    var employeeRoleIds = _context.Roles
+                        .Where(r => r.Name == AppRoles.Employee)
+                        .Select(r => r.Id);
+
+                    // Admins can add only Employees who are not attached to another owner's group.
+                    candidatesQuery = candidatesQuery
+                        .Where(u => _context.UserRoles.Any(ur => ur.UserId == u.Id && employeeRoleIds.Contains(ur.RoleId)))
+                        .Where(u => !_context.GroupMembers.Any(m => m.UserId == u.Id &&
+                            _context.Groups.Any(g => g.Id == m.GroupId && g.OwnerId != group.OwnerId)));
+                }
+
+                var candidates = await candidatesQuery
                     .OrderBy(u => u.Email)
                     .Select(u => new { u.Id, u.Email })
                     .ToListAsync();
@@ -128,14 +147,13 @@ namespace EmployeeMvc.Controllers
 
         // ---------- შექმნა (Admin, Manager) ----------
         [Authorize(Roles = AppRoles.AdminOrManager)]
-        public async Task<IActionResult> Create()
+        public IActionResult Create()
         {
             var vm = new GroupFormViewModel
             {
-                CanChooseOwner = IsAdmin,
+                CanChooseOwner = false,
                 OwnerId = _userManager.GetUserId(User)
             };
-            if (IsAdmin) vm.OwnerOptions = await GetOwnerOptionsAsync();
 
             return View(vm);
         }
@@ -145,15 +163,14 @@ namespace EmployeeMvc.Controllers
         [Authorize(Roles = AppRoles.AdminOrManager)]
         public async Task<IActionResult> Create(GroupFormViewModel model)
         {
-            model.CanChooseOwner = IsAdmin;
+            model.CanChooseOwner = false;
 
-            // Manager-ი ყოველთვის თვითონ ხდება მფლობელი — OwnerId ფორმიდან მისთვის იგნორირდება.
-            var ownerId = IsAdmin ? model.OwnerId : _userManager.GetUserId(User);
+            // New groups always belong to the user creating them.
+            var ownerId = _userManager.GetUserId(User);
 
             if (!ModelState.IsValid || !await IsValidOwnerAsync(ownerId))
             {
-                if (ModelState.IsValid) ModelState.AddModelError(nameof(model.OwnerId), "მფლობელი უნდა იყოს Manager ან Admin.");
-                if (IsAdmin) model.OwnerOptions = await GetOwnerOptionsAsync();
+                if (ModelState.IsValid) ModelState.AddModelError(string.Empty, "ჯგუფის მფლობელი უნდა იყოს Admin ან Manager.");
                 return View(model);
             }
 
@@ -240,6 +257,7 @@ namespace EmployeeMvc.Controllers
             await _context.SaveChangesAsync();
 
             TempData["GroupSuccess"] = "ჯგუფი განახლდა.";
+            if (ownerChanged) return RedirectToAction(nameof(Index));
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -295,6 +313,24 @@ namespace EmployeeMvc.Controllers
             {
                 TempData["GroupError"] = "აირჩიეთ არსებული მომხმარებელი.";
                 return RedirectToAction(nameof(Details), new { id = groupId });
+            }
+
+            if (IsAdmin)
+            {
+                var target = await _userManager.FindByIdAsync(userId);
+                if (target == null || !await _userManager.IsInRoleAsync(target, AppRoles.Employee))
+                {
+                    TempData["GroupError"] = "Admin-ის ჯგუფში მხოლოდ Employee როლის მომხმარებლის დამატება შეიძლება.";
+                    return RedirectToAction(nameof(Details), new { id = groupId });
+                }
+
+                var belongsToAnotherOwner = await _context.GroupMembers.AnyAsync(m =>
+                    m.UserId == userId && _context.Groups.Any(g => g.Id == m.GroupId && g.OwnerId != group.OwnerId));
+                if (belongsToAnotherOwner)
+                {
+                    TempData["GroupError"] = "ეს თანამშრომელი უკვე სხვა მფლობელის ჯგუფშია.";
+                    return RedirectToAction(nameof(Details), new { id = groupId });
+                }
             }
 
             if (userId == group.OwnerId)

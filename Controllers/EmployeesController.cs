@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using EmployeeMvc.Data;
@@ -15,6 +16,7 @@ namespace EmployeeMvc.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
         private readonly ICurrentEmployeeService _currentEmployee;
+        private readonly UserManager<IdentityUser> _userManager;
 
         private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
         private const long MaxPhotoSizeBytes = 5 * 1024 * 1024; 
@@ -22,14 +24,16 @@ namespace EmployeeMvc.Controllers
         public EmployeesController(
             ApplicationDbContext context,
             IWebHostEnvironment environment,
-            ICurrentEmployeeService currentEmployee)
+            ICurrentEmployeeService currentEmployee,
+            UserManager<IdentityUser> userManager)
         {
             _context = context;
             _environment = environment;
             _currentEmployee = currentEmployee;
+            _userManager = userManager;
         }
 
-        // Admin / Manager / Support ხედავენ ყველა თანამშრომელს. დანარჩენს (Employee) — მხოლოდ საკუთარ ჩანაწერს.
+        // Admin sees employees in owned groups; Manager / Support retain their existing broad view.
         private bool IsStaff =>
             User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Support);
 
@@ -39,7 +43,9 @@ namespace EmployeeMvc.Controllers
 
         public async Task<IActionResult> Index(string? searchString, bool? isWorking)
         {
-            var employees = _context.Employees.AsQueryable();
+            var employees = _context.Employees
+                .ScopeToAdminGroups(_context, User)
+                .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(searchString))
             {
@@ -79,7 +85,9 @@ namespace EmployeeMvc.Controllers
 
             if (!IsStaff && !isSelf) return Forbid();
 
-            var employee = await _context.Employees.FirstOrDefaultAsync(e => e.Id == id);
+            var employee = await _context.Employees
+                .ScopeToAdminGroups(_context, User)
+                .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
             ViewData["IsSelf"] = isSelf;
@@ -87,36 +95,163 @@ namespace EmployeeMvc.Controllers
         }
 
         [Authorize(Roles = AppRoles.AdminOrManager)]
-        public IActionResult Create()
+        public async Task<IActionResult> Create()
         {
-            return View();
+            var model = new EmployeeCreateViewModel();
+            await PopulateGroupOptionsAsync(model);
+            PopulateRoleOptions(model);
+            if (model.GroupOptions.Count == 0)
+            {
+                TempData["TaskError"] = "თანამშრომლის დამატებამდე შექმენით საკუთარი ჯგუფი / გუნდი.";
+                return RedirectToAction("Create", "Groups");
+            }
+
+            return View(model);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = AppRoles.AdminOrManager)]
-        public async Task<IActionResult> Create(
-            [Bind("FullName,Position,Department,Email,HireDate,IsWorking,PhotoFile")] Employee employee)
+        public async Task<IActionResult> Create(EmployeeCreateViewModel model)
         {
+            var ownerId = _userManager.GetUserId(User);
+            var group = await _context.Groups.FirstOrDefaultAsync(g =>
+                g.Id == model.GroupId && g.OwnerId == ownerId);
+            if (group == null)
+            {
+                ModelState.AddModelError(nameof(model.GroupId), "აირჩიეთ თქვენი ჯგუფი / გუნდი.");
+            }
+
+            var allowedRoles = User.IsInRole(AppRoles.Admin)
+                ? new[] { AppRoles.Employee, AppRoles.Manager, AppRoles.Support }
+                : new[] { AppRoles.Employee };
+            if (!allowedRoles.Contains(model.Role))
+            {
+                ModelState.AddModelError(nameof(model.Role), "ამ როლის მინიჭების უფლება არ გაქვთ.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.Email) &&
+                await _userManager.FindByEmailAsync(model.Email.Trim()) != null)
+            {
+                ModelState.AddModelError(nameof(model.Email), "ამ ელფოსტით ანგარიში უკვე არსებობს.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.Email) &&
+                await _context.Employees.AnyAsync(e => e.Email.ToLower() == model.Email.Trim().ToLower()))
+            {
+                ModelState.AddModelError(nameof(model.Email), "ამ ელფოსტით თანამშრომლის ჩანაწერი უკვე არსებობს.");
+            }
+
             if (!ModelState.IsValid)
             {
-                return View(employee);
+                await PopulateGroupOptionsAsync(model);
+                PopulateRoleOptions(model);
+                return View(model);
             }
 
-            if (employee.PhotoFile != null)
+            string? savedPhotoPath = null;
+            if (model.PhotoFile != null)
             {
-                var saveResult = await SavePhotoAsync(employee.PhotoFile);
+                var saveResult = await SavePhotoAsync(model.PhotoFile);
                 if (!saveResult.Success)
                 {
-                    ModelState.AddModelError(nameof(Employee.PhotoFile), saveResult.ErrorMessage ?? "ფოტოს ატვირთვა ვერ მოხერხდა.");
-                    return View(employee);
+                    ModelState.AddModelError(nameof(model.PhotoFile), saveResult.ErrorMessage ?? "ფოტოს ატვირთვა ვერ მოხერხდა.");
+                    await PopulateGroupOptionsAsync(model);
+                    PopulateRoleOptions(model);
+                    return View(model);
                 }
-                employee.PhotoPath = saveResult.SavedPath;
+                savedPhotoPath = saveResult.SavedPath;
             }
 
-            _context.Add(employee);
-            await _context.SaveChangesAsync();
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            var account = new IdentityUser
+            {
+                UserName = model.Email.Trim(),
+                Email = model.Email.Trim(),
+                EmailConfirmed = false,
+                LockoutEnabled = true
+            };
+
+            var accountResult = await _userManager.CreateAsync(account, model.Password);
+            if (!accountResult.Succeeded)
+            {
+                await transaction.RollbackAsync();
+                DeletePhotoFile(savedPhotoPath);
+                foreach (var error in accountResult.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+                await PopulateGroupOptionsAsync(model);
+                PopulateRoleOptions(model);
+                return View(model);
+            }
+
+            var roleResult = await _userManager.AddToRoleAsync(account, model.Role);
+            if (!roleResult.Succeeded)
+            {
+                await transaction.RollbackAsync();
+                DeletePhotoFile(savedPhotoPath);
+                foreach (var error in roleResult.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+                await PopulateGroupOptionsAsync(model);
+                PopulateRoleOptions(model);
+                return View(model);
+            }
+
+            var employee = new Employee
+            {
+                FullName = model.FullName.Trim(),
+                Position = model.Position.Trim(),
+                Department = string.IsNullOrWhiteSpace(model.Department) ? null : model.Department.Trim(),
+                Email = model.Email.Trim(),
+                HireDate = model.HireDate,
+                IsWorking = model.IsWorking,
+                PhotoPath = savedPhotoPath,
+                AccountId = account.Id
+            };
+
+            _context.Employees.Add(employee);
+            _context.GroupMembers.Add(new GroupMember
+            {
+                GroupId = group!.Id,
+                UserId = account.Id,
+                JoinedAt = DateTime.UtcNow
+            });
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (DbUpdateException)
+            {
+                await transaction.RollbackAsync();
+                DeletePhotoFile(savedPhotoPath);
+                ModelState.AddModelError(string.Empty, "თანამშრომლის ანგარიშის შექმნა ვერ მოხერხდა. გადაამოწმეთ ელფოსტა და სცადეთ თავიდან.");
+                await PopulateGroupOptionsAsync(model);
+                PopulateRoleOptions(model);
+                return View(model);
+            }
+
+            TempData["TaskSuccess"] = $"თანამშრომელი დაემატა, შეიქმნა {model.Role} როლის ანგარიში და დაემატა თქვენს ჯგუფში.";
             return RedirectToAction(nameof(Index));
+        }
+
+        private void PopulateRoleOptions(EmployeeCreateViewModel model)
+        {
+            var roles = User.IsInRole(AppRoles.Admin)
+                ? new[] { AppRoles.Employee, AppRoles.Support, AppRoles.Manager }
+                : new[] { AppRoles.Employee };
+
+            model.RoleOptions = roles.Select(role => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+            {
+                Value = role,
+                Text = role
+            }).ToList();
+
+            if (!roles.Contains(model.Role)) model.Role = AppRoles.Employee;
         }
 
         public async Task<IActionResult> Edit(int? id)
@@ -132,7 +267,9 @@ namespace EmployeeMvc.Controllers
                 selfEdit = true;
             }
 
-            var employee = await _context.Employees.FindAsync(id);
+            var employee = await _context.Employees
+                .ScopeToAdminGroups(_context, User)
+                .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
             ViewData["SelfEdit"] = selfEdit;
@@ -143,7 +280,7 @@ namespace EmployeeMvc.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(
             int id,
-            [Bind("Id,FullName,Position,Department,Email,HireDate,IsWorking,PhotoFile,PhotoPath")] Employee employee)
+            [Bind("Id,FullName,Position,Department,Email,HireDate,IsWorking,PhotoFile")] Employee employee)
         {
             if (id != employee.Id) return NotFound();
 
@@ -155,11 +292,35 @@ namespace EmployeeMvc.Controllers
                 return await EditOwnProfileAsync(employee);
             }
 
+            var existing = await _context.Employees
+                .ScopeToAdminGroups(_context, User)
+                .FirstOrDefaultAsync(e => e.Id == id);
+            if (existing == null) return NotFound();
+
             if (!ModelState.IsValid)
             {
+                employee.PhotoPath = existing.PhotoPath;
                 return View(employee);
             }
 
+            var account = string.IsNullOrWhiteSpace(existing.AccountId)
+                ? null
+                : await _userManager.FindByIdAsync(existing.AccountId);
+            var emailChanged = account != null &&
+                !string.Equals(account.Email, employee.Email, StringComparison.OrdinalIgnoreCase);
+            if (emailChanged)
+            {
+                var duplicate = await _userManager.FindByEmailAsync(employee.Email);
+                if (duplicate != null && duplicate.Id != account!.Id)
+                {
+                    ModelState.AddModelError(nameof(Employee.Email), "ამ ელფოსტით ანგარიში უკვე არსებობს.");
+                    employee.PhotoPath = existing.PhotoPath;
+                    return View(employee);
+                }
+            }
+
+            var previousPhotoPath = existing.PhotoPath;
+            string? savedPhotoPath = null;
             try
             {
                 if (employee.PhotoFile != null)
@@ -168,19 +329,55 @@ namespace EmployeeMvc.Controllers
                     if (!saveResult.Success)
                     {
                         ModelState.AddModelError(nameof(Employee.PhotoFile), saveResult.ErrorMessage ?? "ფოტოს ატვირთვა ვერ მოხერხდა.");
+                        employee.PhotoPath = existing.PhotoPath;
                         return View(employee);
                     }
 
-                    DeletePhotoFile(employee.PhotoPath);
-                    employee.PhotoPath = saveResult.SavedPath;
+                    savedPhotoPath = saveResult.SavedPath;
                 }
 
-                _context.Update(employee);
+                existing.FullName = employee.FullName;
+                existing.Position = employee.Position;
+                existing.Department = employee.Department;
+                existing.Email = employee.Email.Trim();
+                existing.HireDate = employee.HireDate;
+                existing.IsWorking = employee.IsWorking;
+                if (savedPhotoPath != null) existing.PhotoPath = savedPhotoPath;
+
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                if (emailChanged && account != null)
+                {
+                    account.Email = existing.Email;
+                    account.UserName = existing.Email;
+                    account.EmailConfirmed = false;
+                    var updateResult = await _userManager.UpdateAsync(account);
+                    if (!updateResult.Succeeded)
+                    {
+                        await transaction.RollbackAsync();
+                        foreach (var error in updateResult.Errors)
+                        {
+                            ModelState.AddModelError(nameof(Employee.Email), error.Description);
+                        }
+                        if (savedPhotoPath != null) DeletePhotoFile(savedPhotoPath);
+                        employee.PhotoPath = previousPhotoPath;
+                        return View(employee);
+                    }
+                }
+
                 await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                if (savedPhotoPath != null) DeletePhotoFile(previousPhotoPath);
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!EmployeeExists(employee.Id)) return NotFound();
+                if (savedPhotoPath != null) DeletePhotoFile(savedPhotoPath);
+                if (!EmployeeExists(existing.Id)) return NotFound();
+                throw;
+            }
+            catch (DbUpdateException)
+            {
+                if (savedPhotoPath != null) DeletePhotoFile(savedPhotoPath);
                 throw;
             }
 
@@ -192,7 +389,9 @@ namespace EmployeeMvc.Controllers
         {
             if (id == null) return NotFound();
 
-            var employee = await _context.Employees.FirstOrDefaultAsync(e => e.Id == id);
+            var employee = await _context.Employees
+                .ScopeToAdminGroups(_context, User)
+                .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
             return View(employee);
@@ -203,10 +402,17 @@ namespace EmployeeMvc.Controllers
         [Authorize(Roles = AppRoles.AdminOrManager)]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var employee = await _context.Employees.FindAsync(id);
+            var employee = await _context.Employees
+                .ScopeToAdminGroups(_context, User)
+                .FirstOrDefaultAsync(e => e.Id == id);
             if (employee != null)
             {
                 DeletePhotoFile(employee.PhotoPath);
+                if (!string.IsNullOrWhiteSpace(employee.AccountId))
+                {
+                    var memberships = _context.GroupMembers.Where(m => m.UserId == employee.AccountId);
+                    _context.GroupMembers.RemoveRange(memberships);
+                }
                 _context.Employees.Remove(employee);
                 await _context.SaveChangesAsync();
             }
@@ -218,7 +424,9 @@ namespace EmployeeMvc.Controllers
         [Authorize(Roles = AppRoles.AdminOrManager)]
         public async Task<IActionResult> ToggleStatus(int id)
         {
-            var employee = await _context.Employees.FindAsync(id);
+            var employee = await _context.Employees
+                .ScopeToAdminGroups(_context, User)
+                .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
             employee.IsWorking = !employee.IsWorking;
@@ -274,6 +482,25 @@ namespace EmployeeMvc.Controllers
         private bool EmployeeExists(int id)
         {
             return _context.Employees.Any(e => e.Id == id);
+        }
+
+        private async Task PopulateGroupOptionsAsync(EmployeeCreateViewModel model)
+        {
+            var ownerId = _userManager.GetUserId(User);
+            var groups = await _context.Groups.AsNoTracking()
+                .Where(g => g.OwnerId == ownerId)
+                .OrderBy(g => g.Name)
+                .Select(g => new { g.Id, g.Name })
+                .ToListAsync();
+
+            model.GroupOptions = groups
+                .Select(g => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem(g.Name, g.Id.ToString()))
+                .ToList();
+
+            if (model.GroupId == null && groups.Count == 1)
+            {
+                model.GroupId = groups[0].Id;
+            }
         }
 
         private sealed class PhotoSaveResult

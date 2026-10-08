@@ -8,6 +8,9 @@ namespace EmployeeMvc.Models
     {
         public int Id { get; set; }
 
+        /// <summary>Identity account created for this employee, when one exists.</summary>
+        public string? AccountId { get; set; }
+
         [Required(ErrorMessage = "სახელის შეყვანა სავალდებულოა")]
         [StringLength(100)]
         [Display(Name = "სახელი და გვარი")]

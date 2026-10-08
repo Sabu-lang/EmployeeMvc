@@ -12,11 +12,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
+var sqliteDataSource = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(connectionString).DataSource;
+if (!string.IsNullOrWhiteSpace(sqliteDataSource) && sqliteDataSource != ":memory:")
+{
+    var databaseDirectory = Path.GetDirectoryName(Path.GetFullPath(sqliteDataSource));
+    if (!string.IsNullOrWhiteSpace(databaseDirectory))
+    {
+        Directory.CreateDirectory(databaseDirectory);
+    }
+}
 
-// კონფიგურაცია: appsettings.json-ში მხოლოდ არასაიდუმლო მნიშვნელობები.
-// საიდუმლოები — user-secrets (ლოკალურად) ან environment variables (მაგ. EmailSettings__SenderPassword).
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("App"));
 builder.Services.Configure<SeedAdminSettings>(builder.Configuration.GetSection("SeedAdmin"));
@@ -54,14 +65,11 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.AccessDeniedPath = "/Account/AccessDenied";
 });
 
-// როლის/პაროლის/2FA ცვლილება ძალაში შედის მომდევნო მოთხოვნიდანვე
-// (security stamp მოწმდება ყოველ მოთხოვნაზე, ამიტომ ჩამოშორებული როლი cookie-ში არ რჩება).
 builder.Services.Configure<SecurityStampValidatorOptions>(options =>
 {
     options.ValidationInterval = TimeSpan.Zero;
 });
 
-// Password reset ტოკენი მოქმედია 1 საათი.
 builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
 {
     options.TokenLifespan = TimeSpan.FromHours(1);
@@ -92,7 +100,12 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// როლების (და სურვილისამებრ პირველი Admin-ის) seeding
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 await IdentitySeeder.SeedAsync(app.Services);
 
 app.Run();

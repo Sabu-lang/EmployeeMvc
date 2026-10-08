@@ -100,6 +100,13 @@ else
                     <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info">
                         <i class="bi bi-eye"></i>
                     </a>
+                    @if (User.IsInRole(AppRoles.Admin) && !string.IsNullOrWhiteSpace(item.AccountId))
+                    {
+                        <a asp-controller="Users" asp-action="Roles" asp-route-id="@item.AccountId"
+                           class="btn btn-sm btn-outline-primary" title="ანგარიშის როლის შეცვლა">
+                            <i class="bi bi-shield-check me-1"></i>როლის შეცვლა
+                        </a>
+                    }
                     @if (canManage || currentEmployeeId == item.Id)
                     {
                         <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-warning">

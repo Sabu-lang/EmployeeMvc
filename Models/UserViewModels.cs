@@ -8,6 +8,8 @@ namespace EmployeeMvc.Models
         public bool TwoFactorEnabled { get; set; }
         public bool IsLockedOut { get; set; }
         public bool IsCurrentUser { get; set; }
+        public bool CanManageRoles { get; set; }
+        public bool CanDelete { get; set; }
         public List<string> Roles { get; set; } = new();
     }
 
@@ -15,6 +17,8 @@ namespace EmployeeMvc.Models
     {
         public string UserId { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
+        public bool IsSelf { get; set; }
+        public bool CanGrantAdmin { get; set; }
         public List<string> AllRoles { get; set; } = new();
         public List<string> SelectedRoles { get; set; } = new();
     }

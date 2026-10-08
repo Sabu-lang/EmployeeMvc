@@ -10,3 +10,6 @@ appsettings.Development.json
 *.env
 secrets.json
 appsettings.*.local.json
+Data/EmployeeMvc.db
+Data/EmployeeMvc.db-shm
+Data/EmployeeMvc.db-wal

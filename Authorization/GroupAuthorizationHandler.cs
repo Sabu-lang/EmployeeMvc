@@ -7,8 +7,8 @@ namespace EmployeeMvc.Authorization
 {
     /// <summary>
     /// Resource-based authorization კონკრეტულ ჯგუფზე:
-    ///  - Manage: Admin, ან ჯგუფის მფლობელი, რომელსაც ამჟამადაც აქვს Manager როლი
-    ///  - View:   Admin, მფლობელი, ან ჯგუფის წევრი
+    ///  - Manage: ჯგუფის მფლობელი Admin, ან ჯგუფის მფლობელი Manager
+    ///  - View:   ჯგუფის მფლობელი ან ჯგუფის წევრი
     /// View-სთვის Group.Members აუცილებლად უნდა იყოს ჩატვირთული (Include).
     /// </summary>
     public class GroupAuthorizationHandler : AuthorizationHandler<OperationAuthorizationRequirement, Group>
@@ -21,16 +21,19 @@ namespace EmployeeMvc.Authorization
             var user = context.User;
             if (user.Identity?.IsAuthenticated != true) return Task.CompletedTask;
 
-            if (user.IsInRole(AppRoles.Admin))
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return Task.CompletedTask;
+
+            var isOwner = resource.OwnerId == userId;
+
+            // Admin access is limited to groups owned by the current Admin.
+            if (user.IsInRole(AppRoles.Admin) && isOwner)
             {
                 context.Succeed(requirement);
                 return Task.CompletedTask;
             }
 
-            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Task.CompletedTask;
-
-            var isOwner = resource.OwnerId == userId;
+            if (user.IsInRole(AppRoles.Admin)) return Task.CompletedTask;
 
             if (requirement.Name == GroupOperations.Manage.Name)
             {

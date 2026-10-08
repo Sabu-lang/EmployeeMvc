@@ -4,7 +4,6 @@ namespace EmployeeMvc.Services
 {
     public static class QrCodeHelper
     {
-        /// <summary>QR კოდს სერვერზე ვაგენერირებთ (საიდუმლო გასაღები მესამე მხარის JS/CDN-ს არ ეძლევა).</summary>
         public static string ToPngDataUri(string text)
         {
             using var generator = new QRCodeGenerator();

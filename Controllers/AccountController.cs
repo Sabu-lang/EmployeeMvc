@@ -11,8 +11,6 @@ using EmployeeMvc.Models;
 
 namespace EmployeeMvc.Controllers
 {
-    // partial: 2FA და Password reset ლოგიკა ცალკე ფაილებშია
-    // (AccountController.TwoFactor.cs, AccountController.Password.cs).
     public partial class AccountController : Controller
     {
         private readonly UserManager<IdentityUser> _userManager;
@@ -44,7 +42,6 @@ namespace EmployeeMvc.Controllers
             _logger = logger;
         }
 
-
         [HttpGet]
         public IActionResult Register()
         {
@@ -61,9 +58,14 @@ namespace EmployeeMvc.Controllers
             }
 
             var existingUser = await _userManager.FindByEmailAsync(model.Email);
+
             if (existingUser != null)
             {
-                ModelState.AddModelError(string.Empty, "ეს ელფოსტა უკვე დარეგისტრირებულია.");
+                ModelState.AddModelError(
+                    string.Empty,
+                    "ეს ელფოსტა უკვე დარეგისტრირებულია."
+                );
+
                 return View(model);
             }
 
@@ -80,30 +82,53 @@ namespace EmployeeMvc.Controllers
             {
                 foreach (var error in result.Errors)
                 {
+                    ModelState.AddModelError(
+                        string.Empty,
+                        error.Description
+                    );
+                }
+
+                return View(model);
+            }
+
+            // Public registration never grants administrative privileges.
+            var roleResult = await _userManager.AddToRoleAsync(user, AppRoles.Employee);
+            if (!roleResult.Succeeded)
+            {
+                await _userManager.DeleteAsync(user);
+                foreach (var error in roleResult.Errors)
+                {
                     ModelState.AddModelError(string.Empty, error.Description);
                 }
                 return View(model);
             }
 
-            // ახალი მომხმარებელი ყოველთვის იწყებს ყველაზე დაბალი უფლებებით.
-            // როლს მხოლოდ Admin ცვლის (Users გვერდიდან) — რეგისტრაციის ფორმიდან როლის არჩევა შეუძლებელია.
-            await _userManager.AddToRoleAsync(user, AppRoles.Employee);
+            if (!await TrySendVerificationCodeAsync(model.Email))
+            {
+                TempData["InfoMessage"] = VerificationEmailFailureMessage;
+            }
 
-            await SendVerificationCodeAsync(model.Email);
-
-            return RedirectToAction(nameof(VerifyEmail), new { email = model.Email });
+            return RedirectToAction(
+                nameof(VerifyEmail),
+                new { email = model.Email }
+            );
         }
-
 
         [HttpGet]
         public IActionResult VerifyEmail(string email)
         {
-            return View(new VerifyEmailViewModel { Email = email });
+            return View(
+                new VerifyEmailViewModel
+                {
+                    Email = email
+                }
+            );
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> VerifyEmail(VerifyEmailViewModel model)
+        public async Task<IActionResult> VerifyEmail(
+            VerifyEmailViewModel model)
         {
             if (!ModelState.IsValid)
             {
@@ -111,147 +136,263 @@ namespace EmployeeMvc.Controllers
             }
 
             var record = await _context.EmailVerificationCodes
-                .Where(c => c.Email == model.Email && c.Code == model.Code)
+                .Where(c =>
+                    c.Email == model.Email &&
+                    c.Code == model.Code)
                 .OrderByDescending(c => c.Id)
                 .FirstOrDefaultAsync();
 
-            if (record == null || record.ExpiresAt < DateTime.Now)
+            if (record == null ||
+                record.ExpiresAt < DateTime.Now)
             {
-                ModelState.AddModelError(string.Empty, "კოდი არასწორია ან მისი ვადა გავიდა. მოითხოვეთ ახალი.");
+                ModelState.AddModelError(
+                    string.Empty,
+                    "კოდი არასწორია ან მისი ვადა გავიდა. მოითხოვეთ ახალი."
+                );
+
                 return View(model);
             }
 
             var user = await _userManager.FindByEmailAsync(model.Email);
+
             if (user == null)
             {
                 return NotFound();
             }
 
             user.EmailConfirmed = true;
+
             await _userManager.UpdateAsync(user);
 
             _context.EmailVerificationCodes.Remove(record);
+
             await _context.SaveChangesAsync();
 
-            await _signInManager.SignInAsync(user, isPersistent: false);
+            await _signInManager.SignInAsync(
+                user,
+                isPersistent: false
+            );
 
-            return RedirectToAction("Index", "Employees");
+            return RedirectToAction(
+                "Index",
+                "Employees"
+            );
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ResendCode(string email)
         {
-            await SendVerificationCodeAsync(email);
-            TempData["InfoMessage"] = "ახალი კოდი გაიგზავნა თქვენს ელფოსტაზე.";
-            return RedirectToAction(nameof(VerifyEmail), new { email });
+            TempData["InfoMessage"] = await TrySendVerificationCodeAsync(email)
+                ? "ახალი კოდი გაიგზავნა თქვენს ელფოსტაზე."
+                : VerificationEmailFailureMessage;
+
+            return RedirectToAction(
+                nameof(VerifyEmail),
+                new { email }
+            );
+        }
+
+        private const string VerificationEmailFailureMessage =
+            "ანგარიში შეიქმნა, მაგრამ Resend-მა კოდი ვერ გააგზავნა. სატესტო რეჟიმში სხვა მისამართებზე გაგზავნას შეიძლება დადასტურებული დომენი სჭირდებოდეს. შეამოწმეთ Resend-ის Domains და Logs გვერდები; შემდეგ სცადეთ კოდის თავიდან გაგზავნა.";
+
+        private async Task<bool> TrySendVerificationCodeAsync(string email)
+        {
+            try
+            {
+                await SendVerificationCodeAsync(email);
+                return true;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+            {
+                _logger.LogWarning(ex, "Verification code could not be sent to {Email} through Resend.", email);
+
+                var unsentCodes = await _context.EmailVerificationCodes
+                    .Where(c => c.Email == email)
+                    .ToListAsync();
+                _context.EmailVerificationCodes.RemoveRange(unsentCodes);
+                await _context.SaveChangesAsync();
+
+                return false;
+            }
         }
 
         private async Task SendVerificationCodeAsync(string email)
         {
-            var oldCodes = _context.EmailVerificationCodes.Where(c => c.Email == email);
+            var oldCodes =
+                _context.EmailVerificationCodes
+                    .Where(c => c.Email == email);
+
             _context.EmailVerificationCodes.RemoveRange(oldCodes);
 
-            // კრიპტოგრაფიულად უსაფრთხო გენერატორი (Random.Shared პროგნოზირებადია).
-            var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+            // კრიპტოგრაფიულად უსაფრთხო 6-ნიშნა კოდი
+            var code =
+                RandomNumberGenerator
+                    .GetInt32(100000, 1000000)
+                    .ToString();
 
-            _context.EmailVerificationCodes.Add(new EmailVerificationCode
-            {
-                Email = email,
-                Code = code,
-                ExpiresAt = DateTime.Now.AddMinutes(15)
-            });
+            _context.EmailVerificationCodes.Add(
+                new EmailVerificationCode
+                {
+                    Email = email,
+                    Code = code,
+                    ExpiresAt = DateTime.Now.AddMinutes(15)
+                }
+            );
 
             await _context.SaveChangesAsync();
 
             var subject = "თქვენი დადასტურების კოდი";
+
             var htmlMessage = $@"
                 <p>გამარჯობა!</p>
+
                 <p>თქვენი ერთჯერადი დადასტურების კოდია:</p>
-                <h2 style=""letter-spacing: 4px;"">{code}</h2>
-                <p>კოდი მოქმედია 15 წუთის განმავლობაში.</p>";
 
-            await _emailSender.SendEmailAsync(email, subject, htmlMessage);
+                <h2 style=""letter-spacing: 4px;"">
+                    {code}
+                </h2>
+
+                <p>
+                    კოდი მოქმედია 15 წუთის განმავლობაში.
+                </p>";
+
+            await _emailSender.SendEmailAsync(
+                email,
+                subject,
+                htmlMessage
+            );
         }
-
 
         [HttpGet]
         public IActionResult Login(string? returnUrl = null)
         {
-            return View(new LoginViewModel { ReturnUrl = returnUrl });
+            return View(
+                new LoginViewModel
+                {
+                    ReturnUrl = returnUrl
+                }
+            );
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Login(LoginViewModel model)
+        public async Task<IActionResult> Login(
+            LoginViewModel model)
         {
             if (!ModelState.IsValid)
             {
                 return View(model);
             }
 
-            const string invalidCredentials = "ელფოსტა ან პაროლი არასწორია.";
+            const string invalidCredentials =
+                "ელფოსტა ან პაროლი არასწორია.";
 
-            var user = await _userManager.FindByEmailAsync(model.Email);
+            var user =
+                await _userManager.FindByEmailAsync(model.Email);
+
             if (user == null)
             {
-                ModelState.AddModelError(string.Empty, invalidCredentials);
+                ModelState.AddModelError(
+                    string.Empty,
+                    invalidCredentials
+                );
+
                 return View(model);
             }
 
-            // 1) ჯერ პაროლს ვამოწმებთ (წარუმატებელი მცდელობები ითვლება → lockout).
-            //    ამით არადადასტურებული ანგარიშის არსებობა/კოდის გაგზავნა მხოლოდ სწორი პაროლის მქონეს ეძლევა.
-            var check = await _signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
+            // პაროლის შემოწმება + lockout
+            var check =
+                await _signInManager.CheckPasswordSignInAsync(
+                    user,
+                    model.Password,
+                    lockoutOnFailure: true
+                );
 
             if (check.IsLockedOut)
             {
-                ModelState.AddModelError(string.Empty, "ანგარიში დროებით დაბლოკილია წარუმატებელი მცდელობების გამო. სცადეთ მოგვიანებით.");
+                ModelState.AddModelError(
+                    string.Empty,
+                    "ანგარიში დროებით დაბლოკილია წარუმატებელი მცდელობების გამო. სცადეთ მოგვიანებით."
+                );
+
                 return View(model);
             }
 
             if (!check.Succeeded)
             {
-                ModelState.AddModelError(string.Empty, invalidCredentials);
+                ModelState.AddModelError(
+                    string.Empty,
+                    invalidCredentials
+                );
+
                 return View(model);
             }
 
-            // 2) ელფოსტის დადასტურება (არსებული ლოგიკა)
+            // ელფოსტის დადასტურება
             if (!user.EmailConfirmed)
             {
-                await SendVerificationCodeAsync(model.Email);
-                TempData["InfoMessage"] = "თქვენი ანგარიში ჯერ არ არის დადასტურებული. ახალი კოდი გაიგზავნა თქვენს ელფოსტაზე.";
-                return RedirectToAction(nameof(VerifyEmail), new { email = model.Email });
+                var sent = await TrySendVerificationCodeAsync(model.Email);
+                TempData["InfoMessage"] = sent
+                    ? "თქვენი ანგარიში ჯერ არ არის დადასტურებული. ახალი კოდი გაიგზავნა თქვენს ელფოსტაზე."
+                    : VerificationEmailFailureMessage;
+
+                return RedirectToAction(
+                    nameof(VerifyEmail),
+                    new { email = model.Email }
+                );
             }
 
-            // 3) ავტორიზაცია (2FA ჩართულობის შემთხვევაში RequiresTwoFactor დაბრუნდება)
-            var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RememberMe, lockoutOnFailure: false);
+            // ავტორიზაცია / 2FA
+            var result =
+                await _signInManager.PasswordSignInAsync(
+                    user,
+                    model.Password,
+                    model.RememberMe,
+                    lockoutOnFailure: false
+                );
 
             if (result.RequiresTwoFactor)
             {
-                return RedirectToAction(nameof(LoginWith2fa), new { returnUrl = model.ReturnUrl, rememberMe = model.RememberMe });
+                return RedirectToAction(
+                    nameof(LoginWith2fa),
+                    new
+                    {
+                        returnUrl = model.ReturnUrl,
+                        rememberMe = model.RememberMe
+                    }
+                );
             }
 
             if (result.IsLockedOut)
             {
-                ModelState.AddModelError(string.Empty, "ანგარიში დროებით დაბლოკილია. სცადეთ მოგვიანებით.");
+                ModelState.AddModelError(
+                    string.Empty,
+                    "ანგარიში დროებით დაბლოკილია. სცადეთ მოგვიანებით."
+                );
+
                 return View(model);
             }
 
             if (!result.Succeeded)
             {
-                ModelState.AddModelError(string.Empty, invalidCredentials);
+                ModelState.AddModelError(
+                    string.Empty,
+                    invalidCredentials
+                );
+
                 return View(model);
             }
 
             return RedirectToLocal(model.ReturnUrl);
         }
 
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
             await _signInManager.SignOutAsync();
+
             return RedirectToAction(nameof(Login));
         }
 
@@ -261,19 +402,19 @@ namespace EmployeeMvc.Controllers
             return View();
         }
 
-        /// <summary>
-        /// Login-ის შემდეგ: თუ არის ლოკალური ReturnUrl — იქ; სხვა შემთხვევაში თანამშრომლების გვერდზე
-        /// (Employee როლის მომხმარებელს იქ მხოლოდ საკუთარი ჩანაწერი უჩანს).
-        /// Url.IsLocalUrl იცავს open-redirect შეტევისგან.
-        /// </summary>
-        private IActionResult RedirectToLocal(string? returnUrl)
+        private IActionResult RedirectToLocal(
+            string? returnUrl)
         {
-            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            if (!string.IsNullOrEmpty(returnUrl) &&
+                Url.IsLocalUrl(returnUrl))
             {
                 return LocalRedirect(returnUrl);
             }
 
-            return RedirectToAction("Index", "Employees");
+            return RedirectToAction(
+                "Index",
+                "Employees"
+            );
         }
     }
 }

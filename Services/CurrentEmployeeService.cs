@@ -8,15 +8,10 @@ namespace EmployeeMvc.Services
 {
     public interface ICurrentEmployeeService
     {
-        /// <summary>აბრუნებს მიმდინარე მომხმარებლის Employee ჩანაწერს (ან null-ს).</summary>
         Task<Employee?> GetAsync(ClaimsPrincipal principal);
     }
 
-    /// <summary>
-    /// Identity მომხმარებელი ↔ Employee ჩანაწერი ერთმანეთს უკავშირდება ელფოსტით.
-    /// უსაფრთხოებისთვის საჭიროა, რომ მომხმარებლის ელფოსტა დადასტურებული იყოს
-    /// (ე.ი. მან მართლა აკონტროლებს ამ მისამართს).
-    /// </summary>
+
     public class CurrentEmployeeService : ICurrentEmployeeService
     {
         private readonly UserManager<IdentityUser> _userManager;
@@ -36,9 +31,14 @@ namespace EmployeeMvc.Services
                 return null;
             }
 
-            var email = user.Email.ToLower();
-            return await _context.Employees
+            var linkedEmployee = await _context.Employees
                 .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.AccountId == user.Id);
+
+            if (linkedEmployee != null) return linkedEmployee;
+
+            var email = user.Email.ToLower();
+            return await _context.Employees.AsNoTracking()
                 .FirstOrDefaultAsync(e => e.Email.ToLower() == email);
         }
     }

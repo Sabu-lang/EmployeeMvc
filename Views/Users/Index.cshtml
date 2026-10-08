@@ -2,6 +2,7 @@
 
 @{
     ViewData["Title"] = "მომხმარებლები";
+    var searchEmail = ViewData["SearchEmail"] as string ?? string.Empty;
 
     string BadgeClass(string role) => role switch
     {
@@ -16,6 +17,22 @@
     <h1 class="mb-0">მომხმარებლები და როლები</h1>
 </div>
 
+<form asp-action="Index" method="get" class="data-panel mb-3">
+    <label for="email-search" class="form-label">დარეგისტრირებული მომხმარებლის ელფოსტით ძებნა</label>
+    <div class="input-group">
+        <input id="email-search" name="email" type="search" value="@searchEmail"
+               class="form-control" placeholder="შეიყვანე ელფოსტა ან მისი ნაწილი" autocomplete="off" />
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-search me-1"></i>ძებნა
+        </button>
+        @if (!string.IsNullOrWhiteSpace(searchEmail))
+        {
+            <a asp-action="Index" class="btn btn-outline-secondary">გასუფთავება</a>
+        }
+    </div>
+    <div class="form-text">ძებნაში ჩანს შენი ჯგუფების თანამშრომლები და ჯერ ჯგუფში არმყოფი რეგისტრირებული მომხმარებლები.</div>
+</form>
+
 @if (TempData["UserSuccess"] != null)
 {
     <div class="alert alert-success">@TempData["UserSuccess"]</div>
@@ -23,6 +40,20 @@
 @if (TempData["UserError"] != null)
 {
     <div class="alert alert-danger">@TempData["UserError"]</div>
+}
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">
+        @if (!string.IsNullOrWhiteSpace(searchEmail))
+        {
+            <span>ამ ელფოსტით შესაბამისი რეგისტრირებული მომხმარებელი ვერ მოიძებნა.</span>
+        }
+        else
+        {
+            <span>ჯგუფებში ჯერ თანამშრომლები არ არიან. მოძებნე უკვე დარეგისტრირებული მომხმარებელი ზემოთ.</span>
+        }
+    </div>
 }
 
 <div class="data-panel table-responsive">
@@ -67,10 +98,19 @@
                         }
                     </td>
                     <td class="text-end">
-                        <a asp-action="Roles" asp-route-id="@user.Id" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-shield-check me-1"></i>როლები
-                        </a>
-                        @if (!user.IsCurrentUser)
+                        @if (user.CanManageRoles)
+                        {
+                            <a asp-action="Roles" asp-route-id="@user.Id" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-shield-check me-1"></i>როლის შეცვლა
+                            </a>
+                        }
+                        @if (user.IsCurrentUser)
+                        {
+                            <a asp-action="Roles" asp-route-id="@user.Id" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-shield-check me-1"></i>როლები
+                            </a>
+                        }
+                        @if (user.CanDelete)
                         {
                             <form asp-action="Delete" asp-route-id="@user.Id" method="post" class="d-inline"
                                   onsubmit="return confirm('წავშალო ეს მომხმარებელი?');">
