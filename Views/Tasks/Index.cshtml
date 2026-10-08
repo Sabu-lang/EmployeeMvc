@@ -96,7 +96,7 @@
                         body: new URLSearchParams({ id: draggedTaskId, newStatus: newStatus })
                     });
 
-                    if (response.ok) {
+                    if (response.ok && !response.redirected) {
                         this.appendChild(cardElement);
                     } else {
                         alert('სტატუსის განახლება ვერ მოხერხდა.');

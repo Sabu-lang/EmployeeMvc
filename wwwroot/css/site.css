@@ -300,3 +300,75 @@ footer {
   letter-spacing: 0.5rem;
   font-weight: 600;
 }
+
+/* --- Security / 2FA --- */
+.security-action {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  background: #f8fafc;
+}
+
+.security-action summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.qr-box {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0 0.5rem;
+}
+
+.qr-box img {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px;
+  background: #fff;
+}
+
+.shared-key {
+  font-size: 0.95rem;
+  letter-spacing: 0.08rem;
+  word-break: break-all;
+}
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.recovery-codes code {
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+/* --- Data panels (Users / Groups) --- */
+.data-panel {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 0.25em 0.65em;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #e0e7ff;
+  color: var(--brand-primary-dark);
+  margin-right: 0.25rem;
+}
+
+.role-badge.role-admin { background: #fee2e2; color: #991b1b; }
+.role-badge.role-manager { background: #fef3c7; color: #92400e; }
+.role-badge.role-support { background: #cffafe; color: #155e75; }

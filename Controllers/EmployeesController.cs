@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using EmployeeMvc.Data;
 using EmployeeMvc.Models;
+using EmployeeMvc.Services;
 
 namespace EmployeeMvc.Controllers
 {
@@ -13,15 +14,28 @@ namespace EmployeeMvc.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
+        private readonly ICurrentEmployeeService _currentEmployee;
 
         private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
         private const long MaxPhotoSizeBytes = 5 * 1024 * 1024; 
 
-        public EmployeesController(ApplicationDbContext context, IWebHostEnvironment environment)
+        public EmployeesController(
+            ApplicationDbContext context,
+            IWebHostEnvironment environment,
+            ICurrentEmployeeService currentEmployee)
         {
             _context = context;
             _environment = environment;
+            _currentEmployee = currentEmployee;
         }
+
+        // Admin / Manager / Support ხედავენ ყველა თანამშრომელს. დანარჩენს (Employee) — მხოლოდ საკუთარ ჩანაწერს.
+        private bool IsStaff =>
+            User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Support);
+
+        // მართვა (შექმნა/რედაქტირება/წაშლა) — Admin და Manager.
+        private bool CanManageAll =>
+            User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager);
 
         public async Task<IActionResult> Index(string? searchString, bool? isWorking)
         {
@@ -39,8 +53,18 @@ namespace EmployeeMvc.Controllers
                 employees = employees.Where(e => e.IsWorking == isWorking.Value);
             }
 
+            var me = await _currentEmployee.GetAsync(User);
+
+            if (!IsStaff)
+            {
+                // server-side შეზღუდვა: Employee როლს სხვა თანამშრომლების მონაცემები არ უბრუნდება.
+                var myId = me?.Id;
+                employees = employees.Where(e => e.Id == myId);
+            }
+
             ViewData["CurrentFilter"] = searchString;
             ViewData["CurrentStatus"] = isWorking;
+            ViewData["CurrentEmployeeId"] = me?.Id;
 
             var result = await employees.OrderBy(e => e.FullName).ToListAsync();
             return View(result);
@@ -50,12 +74,19 @@ namespace EmployeeMvc.Controllers
         {
             if (id == null) return NotFound();
 
+            var me = await _currentEmployee.GetAsync(User);
+            var isSelf = me != null && me.Id == id;
+
+            if (!IsStaff && !isSelf) return Forbid();
+
             var employee = await _context.Employees.FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
+            ViewData["IsSelf"] = isSelf;
             return View(employee);
         }
 
+        [Authorize(Roles = AppRoles.AdminOrManager)]
         public IActionResult Create()
         {
             return View();
@@ -63,6 +94,7 @@ namespace EmployeeMvc.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = AppRoles.AdminOrManager)]
         public async Task<IActionResult> Create(
             [Bind("FullName,Position,Department,Email,HireDate,IsWorking,PhotoFile")] Employee employee)
         {
@@ -91,9 +123,19 @@ namespace EmployeeMvc.Controllers
         {
             if (id == null) return NotFound();
 
+            var selfEdit = false;
+            if (!CanManageAll)
+            {
+                // Employee მხოლოდ საკუთარ ჩანაწერს ხსნის; Support-ს რედაქტირება არ შეუძლია.
+                var me = await _currentEmployee.GetAsync(User);
+                if (me == null || me.Id != id) return Forbid();
+                selfEdit = true;
+            }
+
             var employee = await _context.Employees.FindAsync(id);
             if (employee == null) return NotFound();
 
+            ViewData["SelfEdit"] = selfEdit;
             return View(employee);
         }
 
@@ -104,6 +146,14 @@ namespace EmployeeMvc.Controllers
             [Bind("Id,FullName,Position,Department,Email,HireDate,IsWorking,PhotoFile,PhotoPath")] Employee employee)
         {
             if (id != employee.Id) return NotFound();
+
+            if (!CanManageAll)
+            {
+                var me = await _currentEmployee.GetAsync(User);
+                if (me == null || me.Id != id) return Forbid();
+
+                return await EditOwnProfileAsync(employee);
+            }
 
             if (!ModelState.IsValid)
             {
@@ -137,6 +187,7 @@ namespace EmployeeMvc.Controllers
             return RedirectToAction(nameof(Index));
         }
 
+        [Authorize(Roles = AppRoles.AdminOrManager)]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null) return NotFound();
@@ -149,6 +200,7 @@ namespace EmployeeMvc.Controllers
 
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = AppRoles.AdminOrManager)]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var employee = await _context.Employees.FindAsync(id);
@@ -163,12 +215,57 @@ namespace EmployeeMvc.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = AppRoles.AdminOrManager)]
         public async Task<IActionResult> ToggleStatus(int id)
         {
             var employee = await _context.Employees.FindAsync(id);
             if (employee == null) return NotFound();
 
             employee.IsWorking = !employee.IsWorking;
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        // საკუთარი პროფილის რედაქტირება: მხოლოდ სახელი და ფოტო. Position/Department/Email/HireDate/IsWorking
+        // სერვერზე არასოდეს იცვლება, რაც არ უნდა გამოაგზავნოს კლიენტმა (overposting-ის წინააღმდეგ).
+        private async Task<IActionResult> EditOwnProfileAsync(Employee posted)
+        {
+            foreach (var key in new[]
+            {
+                nameof(Employee.Position), nameof(Employee.Email), nameof(Employee.Department),
+                nameof(Employee.HireDate), nameof(Employee.IsWorking)
+            })
+            {
+                ModelState.Remove(key);
+            }
+
+            var existing = await _context.Employees.FindAsync(posted.Id);
+            if (existing == null) return NotFound();
+
+            ViewData["SelfEdit"] = true;
+
+            if (!ModelState.IsValid)
+            {
+                posted.PhotoPath = existing.PhotoPath;
+                return View(posted);
+            }
+
+            if (posted.PhotoFile != null)
+            {
+                var saveResult = await SavePhotoAsync(posted.PhotoFile);
+                if (!saveResult.Success)
+                {
+                    ModelState.AddModelError(nameof(Employee.PhotoFile), saveResult.ErrorMessage ?? "ფოტოს ატვირთვა ვერ მოხერხდა.");
+                    posted.PhotoPath = existing.PhotoPath;
+                    return View(posted);
+                }
+
+                DeletePhotoFile(existing.PhotoPath);
+                existing.PhotoPath = saveResult.SavedPath;
+            }
+
+            existing.FullName = posted.FullName;
             await _context.SaveChangesAsync();
 
             return RedirectToAction(nameof(Index));

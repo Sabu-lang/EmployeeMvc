@@ -49,7 +49,10 @@
     </dl>
 
     <div class="d-flex gap-2">
-        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning">რედაქტირება</a>
+        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || ViewData["IsSelf"] is true)
+        {
+            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning">რედაქტირება</a>
+        }
         <a asp-action="Index" class="btn btn-outline-secondary">უკან სიაში</a>
     </div>
 

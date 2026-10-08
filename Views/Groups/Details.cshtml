@@ -1,0 +1,112 @@
+@model GroupDetailsViewModel
+
+@{
+    ViewData["Title"] = Model.Name;
+}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h1 class="mb-0">@Model.Name</h1>
+    <div class="d-flex gap-2">
+        @if (Model.CanManage)
+        {
+            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning">
+                <i class="bi bi-pencil me-1"></i>რედაქტირება
+            </a>
+        }
+        <a asp-action="Index" class="btn btn-outline-secondary">უკან სიაში</a>
+    </div>
+</div>
+
+@if (TempData["GroupSuccess"] != null)
+{
+    <div class="alert alert-success">@TempData["GroupSuccess"]</div>
+}
+@if (TempData["GroupError"] != null)
+{
+    <div class="alert alert-danger">@TempData["GroupError"]</div>
+}
+
+<div class="data-panel">
+    <dl class="row mb-0">
+        <dt class="col-sm-3">აღწერა</dt>
+        <dd class="col-sm-9">@(string.IsNullOrWhiteSpace(Model.Description) ? "—" : Model.Description)</dd>
+
+        <dt class="col-sm-3">მფლობელი (Manager)</dt>
+        <dd class="col-sm-9">@Model.OwnerEmail</dd>
+
+        <dt class="col-sm-3">შექმნის თარიღი</dt>
+        <dd class="col-sm-9">@Model.CreatedAt.ToString("dd.MM.yyyy")</dd>
+    </dl>
+</div>
+
+<div class="data-panel">
+    <h5 class="mb-3"><i class="bi bi-people me-2"></i>წევრები (@Model.Members.Count)</h5>
+
+    @if (Model.CanManage)
+    {
+        <form asp-action="AddMember" method="post" class="row g-2 mb-3">
+            <input type="hidden" name="groupId" value="@Model.Id" />
+            <div class="col-md-8">
+                <select name="userId" class="form-select" asp-items="Model.Candidates" required>
+                    <option value="">— აირჩიე მომხმარებელი —</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-person-plus me-1"></i>წევრის დამატება
+                </button>
+            </div>
+        </form>
+    }
+
+    @if (!Model.Members.Any())
+    {
+        <p class="text-muted mb-0">ჯგუფში ჯერ წევრები არ არიან.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>ელფოსტა</th>
+                        <th>როლები</th>
+                        <th>დაემატა</th>
+                        @if (Model.CanManage)
+                        {
+                            <th class="text-end">მოქმედება</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var member in Model.Members)
+                    {
+                        <tr>
+                            <td>@member.Email</td>
+                            <td>
+                                @foreach (var role in member.Roles.Split(", ", StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    <span class="role-badge">@role</span>
+                                }
+                            </td>
+                            <td>@member.JoinedAt.ToString("dd.MM.yyyy")</td>
+                            @if (Model.CanManage)
+                            {
+                                <td class="text-end">
+                                    <form asp-action="RemoveMember" method="post" class="d-inline"
+                                          onsubmit="return confirm('ამოვიღო წევრი ჯგუფიდან?');">
+                                        <input type="hidden" name="groupId" value="@Model.Id" />
+                                        <input type="hidden" name="userId" value="@member.UserId" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="ამოღება">
+                                            <i class="bi bi-person-dash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

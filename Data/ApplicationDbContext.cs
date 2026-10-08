@@ -16,6 +16,8 @@ namespace EmployeeMvc.Data
         public DbSet<Employee> Employees { get; set; } = null!;
         public DbSet<TaskItem> Tasks { get; set; } = null!;
         public DbSet<EmailVerificationCode> EmailVerificationCodes { get; set; } = null!;
+        public DbSet<Group> Groups { get; set; } = null!;
+        public DbSet<GroupMember> GroupMembers { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -26,6 +28,33 @@ namespace EmployeeMvc.Data
                 .WithMany()
                 .HasForeignKey(t => t.EmployeeId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Groups: მფლობელი — Restrict (SQL Server-ში multiple cascade paths-ის თავიდან ასაცილებლად).
+            modelBuilder.Entity<Group>(entity =>
+            {
+                entity.HasOne(g => g.Owner)
+                    .WithMany()
+                    .HasForeignKey(g => g.OwnerId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(g => g.OwnerId);
+            });
+
+            // User ↔ Group many-to-many; composite key კრძალავს დუბლირებას.
+            modelBuilder.Entity<GroupMember>(entity =>
+            {
+                entity.HasKey(m => new { m.GroupId, m.UserId });
+
+                entity.HasOne(m => m.Group)
+                    .WithMany(g => g.Members)
+                    .HasForeignKey(m => m.GroupId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(m => m.User)
+                    .WithMany()
+                    .HasForeignKey(m => m.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
 
             modelBuilder.Entity<Employee>().HasData(
                 new Employee

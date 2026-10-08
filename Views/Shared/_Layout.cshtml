@@ -16,21 +16,36 @@
                     <i class="bi bi-people-fill me-2"></i>თანამშრომლების მართვა
                 </a>
                 <div class="navbar-nav ms-auto align-items-sm-center gap-2">
-                    <a class="nav-link" asp-controller="Employees" asp-action="Index">
-                        <i class="bi bi-list-ul me-1"></i>სია
-                    </a>
-                    <a class="nav-link" asp-controller="Employees" asp-action="Create">
-                        <i class="bi bi-plus-circle me-1"></i>დამატება
-                    </a>
-                    <a class="nav-link" asp-controller="Tasks" asp-action="Index">
-                        <i class="bi bi-kanban me-1"></i>Task Board
-                    </a>
-
                     @if (User?.Identity != null && User.Identity.IsAuthenticated)
                     {
-                        <span class="nav-link text-white-50">
+                        var canManageEmployees = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager);
+                        var isStaff = canManageEmployees || User.IsInRole(AppRoles.Support);
+
+                        <a class="nav-link" asp-controller="Employees" asp-action="Index">
+                            <i class="bi bi-list-ul me-1"></i>@(isStaff ? "სია" : "ჩემი პროფილი")
+                        </a>
+                        @if (canManageEmployees)
+                        {
+                            <a class="nav-link" asp-controller="Employees" asp-action="Create">
+                                <i class="bi bi-plus-circle me-1"></i>დამატება
+                            </a>
+                        }
+                        <a class="nav-link" asp-controller="Tasks" asp-action="Index">
+                            <i class="bi bi-kanban me-1"></i>Task Board
+                        </a>
+                        <a class="nav-link" asp-controller="Groups" asp-action="Index">
+                            <i class="bi bi-diagram-3 me-1"></i>ჯგუფები
+                        </a>
+                        @if (User.IsInRole(AppRoles.Admin))
+                        {
+                            <a class="nav-link" asp-controller="Users" asp-action="Index">
+                                <i class="bi bi-person-gear me-1"></i>მომხმარებლები
+                            </a>
+                        }
+
+                        <a class="nav-link text-white-50" asp-controller="Account" asp-action="Security" title="უსაფრთხოება (2FA)">
                             <i class="bi bi-person-circle me-1"></i>@User.Identity.Name
-                        </span>
+                        </a>
                         <form class="d-inline" asp-controller="Account" asp-action="Logout" method="post">
                             <button type="submit" class="btn btn-sm btn-outline-light">
                                 <i class="bi bi-box-arrow-right me-1"></i>გასვლა

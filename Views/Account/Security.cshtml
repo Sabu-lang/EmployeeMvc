@@ -1,0 +1,98 @@
+@model SecurityViewModel
+
+@{
+    ViewData["Title"] = "უსაფრთხოება";
+}
+
+<h1>ანგარიშის უსაფრთხოება</h1>
+
+<div class="form-panel">
+    @if (TempData["SecurityMessage"] != null)
+    {
+        <div class="alert alert-success">@TempData["SecurityMessage"]</div>
+    }
+    @if (TempData["SecurityError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["SecurityError"]</div>
+    }
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0"><i class="bi bi-shield-lock me-2"></i>ორფაქტორიანი ავტორიზაცია (2FA)</h5>
+        @if (Model.Is2faEnabled)
+        {
+            <span class="badge-status badge-working">ჩართულია</span>
+        }
+        else
+        {
+            <span class="badge-status badge-inactive">გამორთულია</span>
+        }
+    </div>
+    <p class="text-muted">
+        შესვლისას, პაროლის გარდა, მოგეთხოვება 6-ნიშნა კოდი Authenticator აპლიკაციიდან
+        (Google Authenticator, Microsoft Authenticator, Authy).
+    </p>
+
+    @if (!Model.Is2faEnabled)
+    {
+        <a asp-action="EnableAuthenticator" class="btn btn-primary">
+            <i class="bi bi-qr-code me-1"></i>Authenticator-ის გააქტიურება
+        </a>
+    }
+    else
+    {
+        <p>
+            დარჩენილი recovery კოდები: <strong>@Model.RecoveryCodesLeft</strong>
+            @if (Model.RecoveryCodesLeft <= 3)
+            {
+                <span class="text-danger ms-1">— რეკომენდებულია ახალი კოდების გენერაცია.</span>
+            }
+        </p>
+
+        <p class="small text-muted">
+            ქვემოთ მოცემული მოქმედებები უსაფრთხოების მიზნით პაროლის დადასტურებას მოითხოვს.
+        </p>
+
+        <details class="security-action">
+            <summary>ახალი recovery კოდების გენერაცია</summary>
+            <form asp-action="GenerateRecoveryCodes" method="post" class="mt-2">
+                <p class="small text-muted">ძველი კოდები გაუქმდება. ახალი კოდები ერთხელ გამოჩნდება — შეინახე უსაფრთხო ადგილას.</p>
+                <div class="input-group">
+                    <input type="password" name="password" class="form-control" placeholder="მიმდინარე პაროლი" autocomplete="current-password" required />
+                    <button type="submit" class="btn btn-outline-primary">გენერაცია</button>
+                </div>
+            </form>
+        </details>
+
+        <details class="security-action">
+            <summary>Authenticator-ის გასაღების განახლება</summary>
+            <form asp-action="ResetAuthenticator" method="post" class="mt-2">
+                <p class="small text-muted">2FA დროებით გამოირთვება და ახალი QR კოდის დასკანირება მოგიწევს. ძველი აპლიკაციის კოდები აღარ იმუშავებს.</p>
+                <div class="input-group">
+                    <input type="password" name="password" class="form-control" placeholder="მიმდინარე პაროლი" autocomplete="current-password" required />
+                    <button type="submit" class="btn btn-outline-warning">განახლება</button>
+                </div>
+            </form>
+        </details>
+
+        <details class="security-action">
+            <summary class="text-danger">2FA-ის გამორთვა</summary>
+            <form asp-action="Disable2fa" method="post" class="mt-2"
+                  onsubmit="return confirm('დარწმუნებული ხარ, რომ გსურს 2FA-ის გამორთვა?');">
+                <p class="small text-muted">გამორთვის შემდეგ ანგარიში მხოლოდ პაროლით იქნება დაცული.</p>
+                <div class="input-group">
+                    <input type="password" name="password" class="form-control" placeholder="მიმდინარე პაროლი" autocomplete="current-password" required />
+                    <button type="submit" class="btn btn-outline-danger">გამორთვა</button>
+                </div>
+            </form>
+        </details>
+
+        @if (Model.IsMachineRemembered)
+        {
+            <form asp-action="ForgetBrowser" method="post" class="mt-3">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-eraser me-1"></i>ამ ბრაუზერის დამახსოვრების გაუქმება
+                </button>
+            </form>
+        }
+    }
+</div>

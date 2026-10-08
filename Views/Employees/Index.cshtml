@@ -2,13 +2,21 @@
 
 @{
     ViewData["Title"] = "თანამშრომლები";
+
+    // UI-ს მხოლოდ ვამარტივებთ; რეალური შემოწმება კონტროლერებშია (server-side).
+    var canManage = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager);
+    var isStaff = canManage || User.IsInRole(AppRoles.Support);
+    var currentEmployeeId = ViewData["CurrentEmployeeId"] as int?;
 }
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <h1 class="mb-0">თანამშრომლების სია</h1>
-    <a asp-action="Create" class="btn btn-primary">
-        <i class="bi bi-plus-circle me-1"></i>ახალი თანამშრომელი
-    </a>
+    <h1 class="mb-0">@(isStaff ? "თანამშრომლების სია" : "ჩემი პროფილი")</h1>
+    @if (canManage)
+    {
+        <a asp-action="Create" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>ახალი თანამშრომელი
+        </a>
+    }
 </div>
 
 @if (TempData["TaskSuccess"] != null)
@@ -47,7 +55,17 @@
 
 @if (!Model.Any())
 {
-    <p class="text-muted text-center py-5">თანამშრომლები ვერ მოიძებნა.</p>
+    @if (!isStaff && currentEmployeeId == null)
+    {
+        <p class="text-muted text-center py-5">
+            თქვენს ანგარიშზე მიბმული თანამშრომლის ჩანაწერი ვერ მოიძებნა.
+            ჩანაწერი მიება დადასტურებული ელფოსტით — მიმართეთ ადმინისტრატორს.
+        </p>
+    }
+    else
+    {
+        <p class="text-muted text-center py-5">თანამშრომლები ვერ მოიძებნა.</p>
+    }
 }
 else
 {
@@ -82,29 +100,37 @@ else
                     <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info">
                         <i class="bi bi-eye"></i>
                     </a>
-                    <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-warning">
-                        <i class="bi bi-pencil"></i>
-                    </a>
-                    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-outline-danger">
-                        <i class="bi bi-trash"></i>
-                    </a>
-                    <form asp-action="ToggleStatus" asp-route-id="@item.Id" method="post" class="d-inline">
-                        <button type="submit" class="btn btn-sm btn-outline-dark" title="სტატუსის შეცვლა">
-                            <i class="bi bi-arrow-repeat"></i>
+                    @if (canManage || currentEmployeeId == item.Id)
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-warning">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                    }
+                    @if (canManage)
+                    {
+                        <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                        <form asp-action="ToggleStatus" asp-route-id="@item.Id" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-dark" title="სტატუსის შეცვლა">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        </form>
+                        <button type="button" class="btn btn-sm btn-outline-primary assign-task-btn"
+                                title="დავალების მინიჭება"
+                                data-employee-id="@item.Id"
+                                data-employee-name="@item.FullName">
+                            <i class="bi bi-clipboard-plus"></i>
                         </button>
-                    </form>
-                    <button type="button" class="btn btn-sm btn-outline-primary assign-task-btn"
-                            title="დავალების მინიჭება"
-                            data-employee-id="@item.Id"
-                            data-employee-name="@item.FullName">
-                        <i class="bi bi-clipboard-plus"></i>
-                    </button>
+                    }
                 </div>
             </div>
         }
     </div>
 }
 
+@if (canManage)
+{
 @* დავალების მინიჭების Modal ფანჯარა — ერთი საერთო ყველა თანამშრომლისთვის *@
 <div class="modal fade" id="assignTaskModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -137,6 +163,7 @@ else
         </form>
     </div>
 </div>
+}
 
 @section Scripts {
     <script>

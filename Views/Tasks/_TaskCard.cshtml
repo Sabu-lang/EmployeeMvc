@@ -8,10 +8,13 @@
     <div class="task-card-description">@Model.Description</div>
     <div class="task-card-footer">
         <span class="task-card-date">@Model.CreatedAt.ToString("dd.MM.yyyy")</span>
-        <form asp-controller="Tasks" asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline">
-            <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="წაშლა" onclick="return confirm('წავშალო ეს დავალება?');">
-                <i class="bi bi-trash"></i>
-            </button>
-        </form>
+        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager))
+        {
+            <form asp-controller="Tasks" asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="წაშლა" onclick="return confirm('წავშალო ეს დავალება?');">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </form>
+        }
     </div>
 </div>

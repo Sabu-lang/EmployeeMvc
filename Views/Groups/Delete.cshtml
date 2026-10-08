@@ -1,0 +1,21 @@
+@model Group
+
+@{
+    ViewData["Title"] = "ჯგუფის წაშლა";
+}
+
+<h1>ჯგუფის წაშლა</h1>
+
+<div class="form-panel">
+    <div class="alert alert-warning">
+        დარწმუნებული ხარ, რომ გსურს ჯგუფის <strong>@Model.Name</strong> წაშლა?
+        ჯგუფის @Model.Members.Count წევრი ჯგუფიდან ამოიშლება (მომხმარებლის ანგარიშები არ წაიშლება).
+    </div>
+
+    <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-flex gap-2">
+        <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash me-1"></i>წაშლა
+        </button>
+        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">გაუქმება</a>
+    </form>
+</div>

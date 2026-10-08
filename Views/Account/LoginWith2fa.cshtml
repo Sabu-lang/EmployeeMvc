@@ -1,0 +1,42 @@
+@model LoginWith2faViewModel
+
+@{
+    ViewData["Title"] = "ორფაქტორიანი ავტორიზაცია";
+}
+
+<div class="auth-wrapper">
+    <div class="auth-panel">
+        <div class="auth-icon">
+            <i class="bi bi-phone-fill"></i>
+        </div>
+        <h1 class="auth-title">დადასტურების კოდი</h1>
+        <p class="auth-subtitle">შეიყვანე 6-ნიშნა კოდი შენი Authenticator აპლიკაციიდან</p>
+
+        <form asp-controller="Account" asp-action="LoginWith2fa" method="post">
+            <input type="hidden" asp-for="RememberMe" />
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="Code" class="form-label"></label>
+                <input asp-for="Code" class="form-control otp-input" maxlength="7" inputmode="numeric"
+                       autocomplete="one-time-code" placeholder="000000" autofocus />
+                <span asp-validation-for="Code" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3 form-check">
+                <input asp-for="RememberMachine" class="form-check-input" />
+                <label asp-for="RememberMachine" class="form-check-label"></label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mb-3">
+                <i class="bi bi-check-circle me-1"></i>დადასტურება
+            </button>
+
+            <p class="text-center text-muted mb-0">
+                აპლიკაციაზე წვდომა დაკარგე?
+                <a asp-controller="Account" asp-action="LoginWithRecoveryCode" asp-route-returnUrl="@Model.ReturnUrl">გამოიყენე recovery კოდი</a>
+            </p>
+        </form>
+    </div>
+</div>

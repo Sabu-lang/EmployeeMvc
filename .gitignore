@@ -5,3 +5,8 @@ obj/
 *.suo
 
 appsettings.Development.json
+# Secrets / local config — არასოდეს ჩაკომიტდეს
+.env
+*.env
+secrets.json
+appsettings.*.local.json

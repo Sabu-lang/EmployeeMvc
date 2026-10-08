@@ -1,0 +1,75 @@
+@model IEnumerable<GroupListItemViewModel>
+
+@{
+    ViewData["Title"] = "ჯგუფები";
+    var canCreate = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager);
+}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h1 class="mb-0">ჯგუფები</h1>
+    @if (canCreate)
+    {
+        <a asp-action="Create" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>ახალი ჯგუფი
+        </a>
+    }
+</div>
+
+@if (TempData["GroupSuccess"] != null)
+{
+    <div class="alert alert-success">@TempData["GroupSuccess"]</div>
+}
+@if (TempData["GroupError"] != null)
+{
+    <div class="alert alert-danger">@TempData["GroupError"]</div>
+}
+
+@if (!Model.Any())
+{
+    <p class="text-muted text-center py-5">ჯგუფები ვერ მოიძებნა.</p>
+}
+else
+{
+    <div class="data-panel table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>სახელი</th>
+                    <th>მფლობელი</th>
+                    <th>წევრები</th>
+                    <th class="text-end">მოქმედებები</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var group in Model)
+                {
+                    <tr>
+                        <td>
+                            <a asp-action="Details" asp-route-id="@group.Id" class="fw-semibold text-decoration-none">@group.Name</a>
+                            @if (!string.IsNullOrWhiteSpace(group.Description))
+                            {
+                                <div class="small text-muted">@group.Description</div>
+                            }
+                        </td>
+                        <td>@group.OwnerEmail</td>
+                        <td>@group.MemberCount</td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@group.Id" class="btn btn-sm btn-outline-info" title="ნახვა">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            @if (group.CanManage)
+                            {
+                                <a asp-action="Edit" asp-route-id="@group.Id" class="btn btn-sm btn-outline-warning" title="რედაქტირება">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a asp-action="Delete" asp-route-id="@group.Id" class="btn btn-sm btn-outline-danger" title="წაშლა">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

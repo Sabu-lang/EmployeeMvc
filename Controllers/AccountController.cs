@@ -1,30 +1,47 @@
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using EmployeeMvc.Data;
 using EmployeeMvc.Models;
 
 namespace EmployeeMvc.Controllers
 {
-
-    public class AccountController : Controller
+    // partial: 2FA და Password reset ლოგიკა ცალკე ფაილებშია
+    // (AccountController.TwoFactor.cs, AccountController.Password.cs).
+    public partial class AccountController : Controller
     {
         private readonly UserManager<IdentityUser> _userManager;
         private readonly SignInManager<IdentityUser> _signInManager;
         private readonly ApplicationDbContext _context;
         private readonly IEmailSender _emailSender;
+        private readonly UrlEncoder _urlEncoder;
+        private readonly AppSettings _appSettings;
+        private readonly IWebHostEnvironment _environment;
+        private readonly ILogger<AccountController> _logger;
 
         public AccountController(
             UserManager<IdentityUser> userManager,
             SignInManager<IdentityUser> signInManager,
             ApplicationDbContext context,
-            IEmailSender emailSender)
+            IEmailSender emailSender,
+            UrlEncoder urlEncoder,
+            IOptions<AppSettings> appSettings,
+            IWebHostEnvironment environment,
+            ILogger<AccountController> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _context = context;
             _emailSender = emailSender;
+            _urlEncoder = urlEncoder;
+            _appSettings = appSettings.Value;
+            _environment = environment;
+            _logger = logger;
         }
 
 
@@ -67,6 +84,10 @@ namespace EmployeeMvc.Controllers
                 }
                 return View(model);
             }
+
+            // ახალი მომხმარებელი ყოველთვის იწყებს ყველაზე დაბალი უფლებებით.
+            // როლს მხოლოდ Admin ცვლის (Users გვერდიდან) — რეგისტრაციის ფორმიდან როლის არჩევა შეუძლებელია.
+            await _userManager.AddToRoleAsync(user, AppRoles.Employee);
 
             await SendVerificationCodeAsync(model.Email);
 
@@ -131,7 +152,8 @@ namespace EmployeeMvc.Controllers
             var oldCodes = _context.EmailVerificationCodes.Where(c => c.Email == email);
             _context.EmailVerificationCodes.RemoveRange(oldCodes);
 
-            var code = Random.Shared.Next(100000, 999999).ToString();
+            // კრიპტოგრაფიულად უსაფრთხო გენერატორი (Random.Shared პროგნოზირებადია).
+            var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
             _context.EmailVerificationCodes.Add(new EmailVerificationCode
             {
@@ -168,13 +190,32 @@ namespace EmployeeMvc.Controllers
                 return View(model);
             }
 
+            const string invalidCredentials = "ელფოსტა ან პაროლი არასწორია.";
+
             var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null)
             {
-                ModelState.AddModelError(string.Empty, "ელფოსტა ან პაროლი არასწორია.");
+                ModelState.AddModelError(string.Empty, invalidCredentials);
                 return View(model);
             }
 
+            // 1) ჯერ პაროლს ვამოწმებთ (წარუმატებელი მცდელობები ითვლება → lockout).
+            //    ამით არადადასტურებული ანგარიშის არსებობა/კოდის გაგზავნა მხოლოდ სწორი პაროლის მქონეს ეძლევა.
+            var check = await _signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
+
+            if (check.IsLockedOut)
+            {
+                ModelState.AddModelError(string.Empty, "ანგარიში დროებით დაბლოკილია წარუმატებელი მცდელობების გამო. სცადეთ მოგვიანებით.");
+                return View(model);
+            }
+
+            if (!check.Succeeded)
+            {
+                ModelState.AddModelError(string.Empty, invalidCredentials);
+                return View(model);
+            }
+
+            // 2) ელფოსტის დადასტურება (არსებული ლოგიკა)
             if (!user.EmailConfirmed)
             {
                 await SendVerificationCodeAsync(model.Email);
@@ -182,20 +223,27 @@ namespace EmployeeMvc.Controllers
                 return RedirectToAction(nameof(VerifyEmail), new { email = model.Email });
             }
 
+            // 3) ავტორიზაცია (2FA ჩართულობის შემთხვევაში RequiresTwoFactor დაბრუნდება)
             var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RememberMe, lockoutOnFailure: false);
 
-            if (!result.Succeeded)
+            if (result.RequiresTwoFactor)
             {
-                ModelState.AddModelError(string.Empty, "ელფოსტა ან პაროლი არასწორია.");
+                return RedirectToAction(nameof(LoginWith2fa), new { returnUrl = model.ReturnUrl, rememberMe = model.RememberMe });
+            }
+
+            if (result.IsLockedOut)
+            {
+                ModelState.AddModelError(string.Empty, "ანგარიში დროებით დაბლოკილია. სცადეთ მოგვიანებით.");
                 return View(model);
             }
 
-            if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+            if (!result.Succeeded)
             {
-                return Redirect(model.ReturnUrl);
+                ModelState.AddModelError(string.Empty, invalidCredentials);
+                return View(model);
             }
 
-            return RedirectToAction("Index", "Employees");
+            return RedirectToLocal(model.ReturnUrl);
         }
 
 
@@ -205,6 +253,27 @@ namespace EmployeeMvc.Controllers
         {
             await _signInManager.SignOutAsync();
             return RedirectToAction(nameof(Login));
+        }
+
+        [HttpGet]
+        public IActionResult AccessDenied()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// Login-ის შემდეგ: თუ არის ლოკალური ReturnUrl — იქ; სხვა შემთხვევაში თანამშრომლების გვერდზე
+        /// (Employee როლის მომხმარებელს იქ მხოლოდ საკუთარი ჩანაწერი უჩანს).
+        /// Url.IsLocalUrl იცავს open-redirect შეტევისგან.
+        /// </summary>
+        private IActionResult RedirectToLocal(string? returnUrl)
+        {
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return LocalRedirect(returnUrl);
+            }
+
+            return RedirectToAction("Index", "Employees");
         }
     }
 }
