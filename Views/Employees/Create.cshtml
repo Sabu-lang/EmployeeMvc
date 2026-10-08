@@ -1,0 +1,60 @@
+@model Employee
+
+@{
+    ViewData["Title"] = "თანამშრომლის დამატება";
+}
+
+<h1>ახალი თანამშრომლის დამატება</h1>
+
+<div class="form-panel">
+    <form asp-action="Create" method="post" enctype="multipart/form-data">
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+        <div class="mb-3">
+            <label asp-for="PhotoFile" class="form-label"></label>
+            <input asp-for="PhotoFile" class="form-control" accept=".jpg,.jpeg,.png,.webp" />
+            <span asp-validation-for="PhotoFile" class="text-danger"></span>
+            <div class="form-text">დაშვებულია JPG, PNG, WEBP — მაქსიმუმ 5MB.</div>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="FullName" class="form-label"></label>
+            <input asp-for="FullName" class="form-control" />
+            <span asp-validation-for="FullName" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Position" class="form-label"></label>
+            <input asp-for="Position" class="form-control" />
+            <span asp-validation-for="Position" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Department" class="form-label"></label>
+            <input asp-for="Department" class="form-control" />
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Email" class="form-label"></label>
+            <input asp-for="Email" class="form-control" />
+            <span asp-validation-for="Email" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="HireDate" class="form-label"></label>
+            <input asp-for="HireDate" class="form-control" type="date" />
+        </div>
+
+        <div class="mb-3 form-check">
+            <input asp-for="IsWorking" class="form-check-input" />
+            <label asp-for="IsWorking" class="form-check-label"></label>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle me-1"></i>დამატება
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary">გაუქმება</a>
+        </div>
+    </form>
+</div>

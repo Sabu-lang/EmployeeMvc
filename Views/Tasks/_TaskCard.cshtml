@@ -1,0 +1,17 @@
+@model TaskItem
+
+<div class="task-card" draggable="true" data-task-id="@Model.Id">
+    <div class="task-card-title">@Model.Title</div>
+    <div class="task-card-employee">
+        <i class="bi bi-person-fill me-1"></i>@(Model.Employee?.FullName ?? "უცნობი")
+    </div>
+    <div class="task-card-description">@Model.Description</div>
+    <div class="task-card-footer">
+        <span class="task-card-date">@Model.CreatedAt.ToString("dd.MM.yyyy")</span>
+        <form asp-controller="Tasks" asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="წაშლა" onclick="return confirm('წავშალო ეს დავალება?');">
+                <i class="bi bi-trash"></i>
+            </button>
+        </form>
+    </div>
+</div>

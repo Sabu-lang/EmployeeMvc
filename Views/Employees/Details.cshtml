@@ -1,0 +1,56 @@
+@model Employee
+
+@{
+    ViewData["Title"] = "თანამშრომლის დეტალები";
+}
+
+<h1>თანამშრომლის დეტალები</h1>
+
+<div class="form-panel">
+
+    @if (!string.IsNullOrEmpty(Model.PhotoPath))
+    {
+        <img src="@Model.PhotoPath" alt="@Model.FullName" class="current-photo-preview" />
+    }
+    else
+    {
+        <div class="employee-photo-placeholder">
+            @(Model.FullName.Length > 0 ? Model.FullName.Substring(0, 1) : "?")
+        </div>
+    }
+
+    <dl class="row mt-3">
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.FullName)</dt>
+        <dd class="col-sm-9">@Model.FullName</dd>
+
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.Position)</dt>
+        <dd class="col-sm-9">@Model.Position</dd>
+
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.Department)</dt>
+        <dd class="col-sm-9">@Model.Department</dd>
+
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.Email)</dt>
+        <dd class="col-sm-9">@Model.Email</dd>
+
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.HireDate)</dt>
+        <dd class="col-sm-9">@Model.HireDate.ToString("dd.MM.yyyy")</dd>
+
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.IsWorking)</dt>
+        <dd class="col-sm-9">
+            @if (Model.IsWorking)
+            {
+                <span class="badge-status badge-working">მუშაობს</span>
+            }
+            else
+            {
+                <span class="badge-status badge-inactive">არ მუშაობს</span>
+            }
+        </dd>
+    </dl>
+
+    <div class="d-flex gap-2">
+        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning">რედაქტირება</a>
+        <a asp-action="Index" class="btn btn-outline-secondary">უკან სიაში</a>
+    </div>
+
+</div>

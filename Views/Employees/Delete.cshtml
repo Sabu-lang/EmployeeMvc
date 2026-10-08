@@ -1,0 +1,33 @@
+@model Employee
+
+@{
+    ViewData["Title"] = "წაშლის დადასტურება";
+}
+
+<h1 class="text-danger">ნამდვილად გსურთ ამ თანამშრომლის წაშლა?</h1>
+
+<div class="form-panel">
+    @if (!string.IsNullOrEmpty(Model.PhotoPath))
+    {
+        <img src="@Model.PhotoPath" alt="@Model.FullName" class="current-photo-preview" />
+    }
+
+    <dl class="row">
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.FullName)</dt>
+        <dd class="col-sm-9">@Model.FullName</dd>
+
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.Position)</dt>
+        <dd class="col-sm-9">@Model.Position</dd>
+
+        <dt class="col-sm-3">@Html.DisplayNameFor(m => m.Email)</dt>
+        <dd class="col-sm-9">@Model.Email</dd>
+    </dl>
+
+    <form asp-action="Delete" method="post">
+        <input type="hidden" asp-for="Id" />
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">დიახ, წაშლა</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">გაუქმება</a>
+        </div>
+    </form>
+</div>

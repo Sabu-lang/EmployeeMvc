@@ -1,0 +1,154 @@
+@model IEnumerable<Employee>
+
+@{
+    ViewData["Title"] = "თანამშრომლები";
+}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h1 class="mb-0">თანამშრომლების სია</h1>
+    <a asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-1"></i>ახალი თანამშრომელი
+    </a>
+</div>
+
+@if (TempData["TaskSuccess"] != null)
+{
+    <div class="alert alert-success">@TempData["TaskSuccess"]</div>
+}
+@if (TempData["TaskError"] != null)
+{
+    <div class="alert alert-danger">@TempData["TaskError"]</div>
+}
+
+<div class="filter-panel">
+    <form asp-action="Index" method="get" class="row g-2 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label small text-muted">ძიება</label>
+            <input type="text" name="searchString" value="@ViewData["CurrentFilter"]"
+                   class="form-control" placeholder="სახელი ან პოზიცია..." />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small text-muted">სტატუსი</label>
+            <select name="isWorking" class="form-select" asp-items="@(new SelectList(new[] {
+                new { Value = "", Text = "ყველა სტატუსი" },
+                new { Value = "true", Text = "მუშაობს" },
+                new { Value = "false", Text = "არ მუშაობს" }
+            }, "Value", "Text", ViewData["CurrentStatus"]))">
+            </select>
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-fill">
+                <i class="bi bi-search me-1"></i>ძებნა
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary">გასუფთავება</a>
+        </div>
+    </form>
+</div>
+
+@if (!Model.Any())
+{
+    <p class="text-muted text-center py-5">თანამშრომლები ვერ მოიძებნა.</p>
+}
+else
+{
+    <div class="employee-grid">
+        @foreach (var item in Model)
+        {
+            <div class="employee-card">
+                @if (!string.IsNullOrEmpty(item.PhotoPath))
+                {
+                    <img src="@item.PhotoPath" alt="@item.FullName" class="employee-photo" />
+                }
+                else
+                {
+                    <div class="employee-photo-placeholder">
+                        @(item.FullName.Length > 0 ? item.FullName.Substring(0, 1) : "?")
+                    </div>
+                }
+
+                <div class="name">@item.FullName</div>
+                <div class="position">@item.Position</div>
+
+                @if (item.IsWorking)
+                {
+                    <span class="badge-status badge-working">მუშაობს</span>
+                }
+                else
+                {
+                    <span class="badge-status badge-inactive">არ მუშაობს</span>
+                }
+
+                <div class="actions">
+                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                    <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-warning">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                    <form asp-action="ToggleStatus" asp-route-id="@item.Id" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-outline-dark" title="სტატუსის შეცვლა">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                    </form>
+                    <button type="button" class="btn btn-sm btn-outline-primary assign-task-btn"
+                            title="დავალების მინიჭება"
+                            data-employee-id="@item.Id"
+                            data-employee-name="@item.FullName">
+                        <i class="bi bi-clipboard-plus"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* დავალების მინიჭების Modal ფანჯარა — ერთი საერთო ყველა თანამშრომლისთვის *@
+<div class="modal fade" id="assignTaskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form asp-controller="Tasks" asp-action="Create" method="post" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">დავალების მინიჭება — <span id="modalEmployeeName"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="დახურვა"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="employeeId" id="modalEmployeeId" />
+
+                <div class="mb-3">
+                    <label class="form-label">დავალების სახელი</label>
+                    <input type="text" name="title" class="form-control" required maxlength="150" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">აღწერა (რას ავალებთ თანამშრომელს)</label>
+                    <textarea name="description" class="form-control" rows="4" required maxlength="2000"></textarea>
+                </div>
+
+                <div class="form-text">დავალების შექმნისთანავე შეტყობინება ავტომატურად გაეგზავნება თანამშრომლის ელფოსტაზე.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">გაუქმება</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-send me-1"></i>მინიჭება და გაგზავნა
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // ღილაკზე დაჭერისას ვავსებთ Modal-ს იმ თანამშრომლის მონაცემებით
+        document.querySelectorAll('.assign-task-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                document.getElementById('modalEmployeeId').value = this.dataset.employeeId;
+                document.getElementById('modalEmployeeName').textContent = this.dataset.employeeName;
+
+                const modal = new bootstrap.Modal(document.getElementById('assignTaskModal'));
+                modal.show();
+            });
+        });
+    </script>
+}

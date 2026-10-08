@@ -1,0 +1,110 @@
+@model IEnumerable<TaskItem>
+
+@{
+    ViewData["Title"] = "Task Board";
+}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h1 class="mb-0">Task Board</h1>
+</div>
+
+@if (TempData["TaskSuccess"] != null)
+{
+    <div class="alert alert-success">@TempData["TaskSuccess"]</div>
+}
+@if (TempData["TaskError"] != null)
+{
+    <div class="alert alert-danger">@TempData["TaskError"]</div>
+}
+
+@*  *@
+@Html.AntiForgeryToken()
+
+<div class="task-board">
+    <div class="task-column" data-status="0">
+        <h5 class="task-column-title">გასაკეთებელი</h5>
+        <div class="task-column-body" id="column-0">
+            @foreach (var task in Model.Where(t => t.Status == TaskBoardStatus.ToDo))
+            {
+                @await Html.PartialAsync("_TaskCard", task)
+            }
+        </div>
+    </div>
+
+    <div class="task-column" data-status="1">
+        <h5 class="task-column-title">მიმდინარეობს</h5>
+        <div class="task-column-body" id="column-1">
+            @foreach (var task in Model.Where(t => t.Status == TaskBoardStatus.InProgress))
+            {
+                @await Html.PartialAsync("_TaskCard", task)
+            }
+        </div>
+    </div>
+
+    <div class="task-column" data-status="2">
+        <h5 class="task-column-title">დასრულებული</h5>
+        <div class="task-column-body" id="column-2">
+            @foreach (var task in Model.Where(t => t.Status == TaskBoardStatus.Done))
+            {
+                @await Html.PartialAsync("_TaskCard", task)
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const csrfToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+        let draggedTaskId = null;
+
+        document.querySelectorAll('.task-card').forEach(card => {
+            card.addEventListener('dragstart', function (e) {
+                draggedTaskId = this.dataset.taskId;
+                e.dataTransfer.effectAllowed = 'move';
+                this.classList.add('dragging');
+            });
+            card.addEventListener('dragend', function () {
+                this.classList.remove('dragging');
+            });
+        });
+
+        document.querySelectorAll('.task-column-body').forEach(column => {
+            column.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                this.classList.add('drag-over');
+            });
+            column.addEventListener('dragleave', function () {
+                this.classList.remove('drag-over');
+            });
+            column.addEventListener('drop', async function (e) {
+                e.preventDefault();
+                this.classList.remove('drag-over');
+
+                const newStatus = this.closest('.task-column').dataset.status;
+                const cardElement = document.querySelector(`.task-card[data-task-id="${draggedTaskId}"]`);
+
+                if (!cardElement || !draggedTaskId) return;
+
+                try {
+                    const response = await fetch('/Tasks/UpdateStatus', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: new URLSearchParams({ id: draggedTaskId, newStatus: newStatus })
+                    });
+
+                    if (response.ok) {
+                        this.appendChild(cardElement);
+                    } else {
+                        alert('სტატუსის განახლება ვერ მოხერხდა.');
+                    }
+                } catch (err) {
+                    alert('კავშირის შეცდომა სერვერთან.');
+                }
+            });
+        });
+    </script>
+}

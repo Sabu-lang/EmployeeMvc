@@ -1,0 +1,52 @@
+@model LoginViewModel
+
+@{
+    ViewData["Title"] = "შესვლა";
+    Layout = "_Layout";
+}
+
+<div class="auth-wrapper">
+    <div class="auth-panel">
+        <div class="auth-icon">
+            <i class="bi bi-shield-lock-fill"></i>
+        </div>
+        <h1 class="auth-title">შესვლა</h1>
+        <p class="auth-subtitle">გააგრძელე თანამშრომლების მართვის სისტემაში</p>
+
+        @if (TempData["InfoMessage"] != null)
+        {
+            <div class="alert alert-info">@TempData["InfoMessage"]</div>
+        }
+
+        <form asp-controller="Account" asp-action="Login" method="post">
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" placeholder="name@example.com" autocomplete="email" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Password" class="form-label"></label>
+                <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3 form-check">
+                <input asp-for="RememberMe" class="form-check-input" />
+                <label asp-for="RememberMe" class="form-check-label"></label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mb-3">
+                <i class="bi bi-box-arrow-in-right me-1"></i>შესვლა
+            </button>
+
+            <p class="text-center text-muted mb-0">
+                არ გაქვს ანგარიში?
+                <a asp-controller="Account" asp-action="Register">დარეგისტრირდი</a>
+            </p>
+        </form>
+    </div>
+</div>
