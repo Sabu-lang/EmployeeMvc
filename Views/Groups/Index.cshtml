@@ -1,7 +1,7 @@
 @model IEnumerable<GroupListItemViewModel>
 
 @{
-    ViewData["Title"] = "ჯგუფები";
+    ViewData["Title"] = "გუნდები";
     var canCreate = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager);
 }
 
