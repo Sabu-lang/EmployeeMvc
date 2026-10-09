@@ -2,8 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace EmployeeMvc.Models
 {
-    // შენიშვნა: MVC non-nullable string თვისებებს implicit [Required]-ად თვლის,
-    // ამიტომ ფორმიდან არგამოგზავნილი ველები აქ string?-ია.
+
+
 
     public class ForgotPasswordViewModel
     {

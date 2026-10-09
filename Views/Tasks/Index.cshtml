@@ -1,7 +1,8 @@
-@model IEnumerable<TaskItem>
+@model IEnumerable<TaskBoardItemViewModel>
 
 @{
     ViewData["Title"] = "Task Board";
+    var canReview = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager);
 }
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -17,7 +18,7 @@
     <div class="alert alert-danger">@TempData["TaskError"]</div>
 }
 
-@*  *@
+
 @Html.AntiForgeryToken()
 
 <div class="task-board">
@@ -41,6 +42,16 @@
         </div>
     </div>
 
+    <div class="task-column" data-status="3">
+        <h5 class="task-column-title">შემოწმების მოლოდინში</h5>
+        <div class="task-column-body" id="column-3">
+            @foreach (var task in Model.Where(t => t.Status == TaskBoardStatus.PendingReview))
+            {
+                @await Html.PartialAsync("_TaskCard", task)
+            }
+        </div>
+    </div>
+
     <div class="task-column" data-status="2">
         <h5 class="task-column-title">დასრულებული</h5>
         <div class="task-column-body" id="column-2">
@@ -53,6 +64,8 @@
 </div>
 
 @section Scripts {
+    @if (canReview)
+    {
     <script>
         const csrfToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
@@ -85,6 +98,10 @@
                 const cardElement = document.querySelector(`.task-card[data-task-id="${draggedTaskId}"]`);
 
                 if (!cardElement || !draggedTaskId) return;
+                if (!['0', '1'].includes(newStatus) || cardElement.dataset.status === '3') {
+                    alert('შემოწმების მოლოდინში ან დასრულებული დავალება ამ გზით ვერ შეიცვლება.');
+                    return;
+                }
 
                 try {
                     const response = await fetch('/Tasks/UpdateStatus', {
@@ -107,4 +124,5 @@
             });
         });
     </script>
+    }
 }

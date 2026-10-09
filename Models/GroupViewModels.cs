@@ -20,7 +20,7 @@ namespace EmployeeMvc.Models
         [Display(Name = "ჯგუფის მფლობელი (Manager)")]
         public string? OwnerId { get; set; }
 
-        /// <summary>მფლობელის არჩევა შეუძლია მხოლოდ Admin-ს.</summary>
+
         public bool CanChooseOwner { get; set; }
 
         [ValidateNever]

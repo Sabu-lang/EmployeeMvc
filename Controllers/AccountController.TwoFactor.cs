@@ -8,13 +8,13 @@ using EmployeeMvc.Services;
 
 namespace EmployeeMvc.Controllers
 {
-    // Security გვერდი და Two-Factor Authentication (ASP.NET Core Identity-ის სტანდარტული TOTP).
+
     public partial class AccountController
     {
         private const string AuthenticatorIssuer = "EmployeeMvc";
         private const string RecoveryCodesKey = "RecoveryCodes";
 
-        // ---------- Security (ცენტრალური გვერდი) ----------
+
 
         [Authorize]
         [HttpGet]
@@ -34,7 +34,7 @@ namespace EmployeeMvc.Controllers
             return View(model);
         }
 
-        // ---------- 2FA-ის ჩართვა ----------
+
 
         [Authorize]
         [HttpGet]
@@ -43,8 +43,8 @@ namespace EmployeeMvc.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-            // 2FA უკვე ჩართულია → საიდუმლო გასაღებს აღარ ვაჩვენებთ
-            // (ხელახლა სანახავად/შესაცვლელად საჭიროა Reset პაროლით).
+
+
             if (await _userManager.GetTwoFactorEnabledAsync(user))
             {
                 return RedirectToAction(nameof(Security));
@@ -100,12 +100,12 @@ namespace EmployeeMvc.Controllers
             return RedirectToAction(nameof(Security));
         }
 
-        // ---------- Recovery codes ----------
 
-        /// <summary>
-        /// Recovery კოდები ნაჩვენებია მხოლოდ გენერაციისთანავე, ერთხელ (შენახული კოდების ხელახლა ნახვა შეუძლებელია).
-        /// დაკარგვის შემთხვევაში — ახლის გენერაცია პაროლით დადასტურების შემდეგ.
-        /// </summary>
+
+
+
+
+
         [Authorize]
         [HttpGet]
         public IActionResult ShowRecoveryCodes()
@@ -143,7 +143,7 @@ namespace EmployeeMvc.Controllers
             return RedirectToAction(nameof(ShowRecoveryCodes));
         }
 
-        // ---------- გამორთვა / გასაღების განახლება (პაროლით ხელახალი დადასტურება) ----------
+
 
         [Authorize]
         [HttpPost]
@@ -206,7 +206,7 @@ namespace EmployeeMvc.Controllers
             return RedirectToAction(nameof(Security));
         }
 
-        // ---------- Login 2FA ეტაპი ----------
+
 
         [HttpGet]
         public async Task<IActionResult> LoginWith2fa(bool rememberMe, string? returnUrl = null)
@@ -298,12 +298,12 @@ namespace EmployeeMvc.Controllers
             return View(model);
         }
 
-        // ---------- helpers ----------
 
-        /// <summary>
-        /// პაროლის ხელახალი შემოწმება მგრძნობიარე ოპერაციებისთვის.
-        /// lockoutOnFailure: true — რომ გატაცებული სესიიდან პაროლის გამოცნობა ვერ მოხერხდეს.
-        /// </summary>
+
+
+
+
+
         private async Task<bool> ReauthenticateAsync(IdentityUser user, string? password)
         {
             if (string.IsNullOrEmpty(password)) return false;
@@ -346,7 +346,7 @@ namespace EmployeeMvc.Controllers
             return result.ToString().ToLowerInvariant();
         }
 
-        /// <summary>otpauth:// URI — Google Authenticator, Microsoft Authenticator და Authy ყველა სტანდარტულ TOTP-ს იღებს.</summary>
+
         private string GenerateQrCodeUri(string email, string unformattedKey)
         {
             return string.Format(

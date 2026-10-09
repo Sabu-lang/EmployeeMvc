@@ -5,12 +5,12 @@ using EmployeeMvc.Models;
 
 namespace EmployeeMvc.Data
 {
-    /// <summary>
-    /// აპლიკაციის გაშვებისას:
-    ///  1) ქმნის 4 როლს (Admin, Manager, Support, Employee), თუ არ არსებობს;
-    ///  2) თუ კონფიგურაციაშია SeedAdmin:Email — ქმნის/ანიჭებს მას Admin როლს;
-    ///  3) არსებულ მომხმარებლებს, რომლებსაც არცერთი როლი არ აქვთ (ძველი რეგისტრაციები), ანიჭებს Employee-ს.
-    /// </summary>
+
+
+
+
+
+
     public static class IdentitySeeder
     {
         public static async Task SeedAsync(IServiceProvider services)
@@ -62,7 +62,7 @@ namespace EmployeeMvc.Data
                     }
                     else if (!admin.EmailConfirmed)
                     {
-                        // არადადასტურებულ (შესაძლოა სხვის მიერ წინასწარ რეგისტრირებულ) ანგარიშს Admin-ს არ ვანიჭებთ.
+
                         logger.LogWarning("მომხმარებელი {Email} არსებობს, მაგრამ ელფოსტა დადასტურებული არ არის — Admin როლი არ მიენიჭა.", seed.Email);
                         admin = null;
                     }

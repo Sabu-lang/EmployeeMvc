@@ -7,7 +7,8 @@ namespace EmployeeMvc.Models
     {
         ToDo = 0,       
         InProgress = 1, 
-        Done = 2        
+        Done = 2,
+        PendingReview = 3
     }
 
     public class TaskItem
@@ -35,5 +36,7 @@ namespace EmployeeMvc.Models
 
         [ForeignKey(nameof(EmployeeId))]
         public Employee? Employee { get; set; }
+
+        public ICollection<TaskSubmission> Submissions { get; set; } = new List<TaskSubmission>();
     }
 }

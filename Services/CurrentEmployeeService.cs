@@ -26,16 +26,19 @@ namespace EmployeeMvc.Services
         public async Task<Employee?> GetAsync(ClaimsPrincipal principal)
         {
             var user = await _userManager.GetUserAsync(principal);
-            if (user == null || !user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email))
+            if (user == null || string.IsNullOrWhiteSpace(user.Email))
             {
                 return null;
             }
+
+
 
             var linkedEmployee = await _context.Employees
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.AccountId == user.Id);
 
             if (linkedEmployee != null) return linkedEmployee;
+            if (!user.EmailConfirmed) return null;
 
             var email = user.Email.ToLower();
             return await _context.Employees.AsNoTracking()

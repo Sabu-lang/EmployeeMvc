@@ -156,12 +156,18 @@ footer {
   font-size: 0.9rem;
 }
 
-/* --- Task Board --- */
+
 .task-board {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.25rem;
   align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .task-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 860px) {
@@ -247,7 +253,7 @@ footer {
   color: #94a3b8;
 }
 
-/* --- Auth pages (Login / Register / VerifyEmail) --- */
+
 .auth-wrapper {
   display: flex;
   justify-content: center;
@@ -301,7 +307,7 @@ footer {
   font-weight: 600;
 }
 
-/* --- Security / 2FA --- */
+
 .security-action {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -349,7 +355,7 @@ footer {
   color: #0f172a;
 }
 
-/* --- Data panels (Users / Groups) --- */
+
 .data-panel {
   background: var(--surface-card);
   border-radius: var(--radius-lg);

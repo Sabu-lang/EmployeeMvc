@@ -2,10 +2,10 @@ using Microsoft.AspNetCore.Identity;
 
 namespace EmployeeMvc.Models
 {
-    /// <summary>
-    /// User ↔ Group many-to-many join entity.
-    /// Composite PK (GroupId, UserId) ბაზის დონეზე გამორიცხავს ერთი და იგივე მომხმარებლის ორჯერ დამატებას.
-    /// </summary>
+
+
+
+
     public class GroupMember
     {
         public int GroupId { get; set; }

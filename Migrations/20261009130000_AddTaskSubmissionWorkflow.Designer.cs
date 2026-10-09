@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EmployeeMvc.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261008192910_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20261009130000_AddTaskSubmissionWorkflow")]
+    partial class AddTaskSubmissionWorkflow
     {
 
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -50,6 +50,9 @@ namespace EmployeeMvc.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("AccountId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Department")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
@@ -78,6 +81,9 @@ namespace EmployeeMvc.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique();
 
                     b.ToTable("Employees");
 
@@ -191,6 +197,57 @@ namespace EmployeeMvc.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("Tasks");
+                });
+
+            modelBuilder.Entity("EmployeeMvc.Models.TaskSubmission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("FileContent")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewComment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ReviewedStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TaskItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskItemId");
+
+                    b.ToTable("TaskSubmissions");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -430,6 +487,17 @@ namespace EmployeeMvc.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("EmployeeMvc.Models.TaskSubmission", b =>
+                {
+                    b.HasOne("EmployeeMvc.Models.TaskItem", "TaskItem")
+                        .WithMany("Submissions")
+                        .HasForeignKey("TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TaskItem");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -484,6 +552,11 @@ namespace EmployeeMvc.Migrations
             modelBuilder.Entity("EmployeeMvc.Models.Group", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("EmployeeMvc.Models.TaskItem", b =>
+                {
+                    b.Navigation("Submissions");
                 });
 #pragma warning restore 612, 618
         }

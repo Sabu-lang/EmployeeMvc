@@ -33,18 +33,18 @@ namespace EmployeeMvc.Controllers
             _userManager = userManager;
         }
 
-        // Admin sees employees in owned groups; Manager / Support retain their existing broad view.
+
         private bool IsStaff =>
             User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Support);
 
-        // მართვა (შექმნა/რედაქტირება/წაშლა) — Admin და Manager.
+
         private bool CanManageAll =>
             User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager);
 
         public async Task<IActionResult> Index(string? searchString, bool? isWorking)
         {
             var employees = _context.Employees
-                .ScopeToAdminGroups(_context, User)
+                .ScopeToVisibleGroups(_context, User)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(searchString))
@@ -63,7 +63,7 @@ namespace EmployeeMvc.Controllers
 
             if (!IsStaff)
             {
-                // server-side შეზღუდვა: Employee როლს სხვა თანამშრომლების მონაცემები არ უბრუნდება.
+
                 var myId = me?.Id;
                 employees = employees.Where(e => e.Id == myId);
             }
@@ -86,7 +86,7 @@ namespace EmployeeMvc.Controllers
             if (!IsStaff && !isSelf) return Forbid();
 
             var employee = await _context.Employees
-                .ScopeToAdminGroups(_context, User)
+                .ScopeToVisibleGroups(_context, User)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
@@ -261,14 +261,14 @@ namespace EmployeeMvc.Controllers
             var selfEdit = false;
             if (!CanManageAll)
             {
-                // Employee მხოლოდ საკუთარ ჩანაწერს ხსნის; Support-ს რედაქტირება არ შეუძლია.
+
                 var me = await _currentEmployee.GetAsync(User);
                 if (me == null || me.Id != id) return Forbid();
                 selfEdit = true;
             }
 
             var employee = await _context.Employees
-                .ScopeToAdminGroups(_context, User)
+                .ScopeToVisibleGroups(_context, User)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
@@ -293,7 +293,7 @@ namespace EmployeeMvc.Controllers
             }
 
             var existing = await _context.Employees
-                .ScopeToAdminGroups(_context, User)
+                .ScopeToVisibleGroups(_context, User)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (existing == null) return NotFound();
 
@@ -390,7 +390,7 @@ namespace EmployeeMvc.Controllers
             if (id == null) return NotFound();
 
             var employee = await _context.Employees
-                .ScopeToAdminGroups(_context, User)
+                .ScopeToVisibleGroups(_context, User)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
@@ -403,7 +403,7 @@ namespace EmployeeMvc.Controllers
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var employee = await _context.Employees
-                .ScopeToAdminGroups(_context, User)
+                .ScopeToVisibleGroups(_context, User)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (employee != null)
             {
@@ -425,7 +425,7 @@ namespace EmployeeMvc.Controllers
         public async Task<IActionResult> ToggleStatus(int id)
         {
             var employee = await _context.Employees
-                .ScopeToAdminGroups(_context, User)
+                .ScopeToVisibleGroups(_context, User)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
 
@@ -435,8 +435,8 @@ namespace EmployeeMvc.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // საკუთარი პროფილის რედაქტირება: მხოლოდ სახელი და ფოტო. Position/Department/Email/HireDate/IsWorking
-        // სერვერზე არასოდეს იცვლება, რაც არ უნდა გამოაგზავნოს კლიენტმა (overposting-ის წინააღმდეგ).
+
+
         private async Task<IActionResult> EditOwnProfileAsync(Employee posted)
         {
             foreach (var key in new[]

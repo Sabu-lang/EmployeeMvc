@@ -6,7 +6,7 @@ using EmployeeMvc.Models;
 
 namespace EmployeeMvc.Controllers
 {
-    // Forgot Password / Reset Password
+
     public partial class AccountController
     {
         [HttpGet]
@@ -50,7 +50,7 @@ namespace EmployeeMvc.Controllers
                 }
             }
 
-            // ყოველთვის ერთი და იგივე პასუხი — არ ვამჟღავნებთ, არსებობს თუ არა ანგარიში.
+
             return RedirectToAction(nameof(ForgotPasswordConfirmation));
         }
 
@@ -89,12 +89,12 @@ namespace EmployeeMvc.Controllers
             var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null)
             {
-                // არ ვამჟღავნებთ, რომ ასეთი მომხმარებელი არ არსებობს.
+
                 return RedirectToAction(nameof(ResetPasswordConfirmation));
             }
 
-            // ResetPasswordAsync ამოწმებს ტოკენს (ვადა + ერთჯერადობა security stamp-ით) და პაროლის პოლიტიკას.
-            // წარმატებისას security stamp იცვლება → ძველი პაროლი და ძველი სესიები აღარ მუშაობს.
+
+
             var result = await _userManager.ResetPasswordAsync(user, token, model.Password);
 
             if (result.Succeeded)
@@ -141,11 +141,11 @@ namespace EmployeeMvc.Controllers
             }
         }
 
-        /// <summary>
-        /// ბმულს ვაგებთ კონფიგურაციაში მითითებული საჯარო მისამართით (App:PublicBaseUrl), რათა თავდამსხმელმა
-        /// Host header-ის გაყალბებით reset ბმული თავის დომენზე ვერ გადაიყვანოს. მხოლოდ Development-ში
-        /// ვიყენებთ მოთხოვნის მისამართს, თუ PublicBaseUrl მითითებული არ არის.
-        /// </summary>
+
+
+
+
+
         private string? BuildAbsoluteUrl(string relativePath)
         {
             var baseUrl = _appSettings.PublicBaseUrl;

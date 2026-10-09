@@ -28,8 +28,8 @@ namespace EmployeeMvc.Controllers
 
         private bool IsAdmin => User.IsInRole(AppRoles.Admin);
 
-        // ---------- სია ----------
-        // Admin sees owned groups; other users see groups they own or belong to.
+
+
         public async Task<IActionResult> Index()
         {
             var userId = _userManager.GetUserId(User)!;
@@ -72,7 +72,7 @@ namespace EmployeeMvc.Controllers
             return View(items);
         }
 
-        // ---------- დეტალები + წევრები ----------
+
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null) return NotFound();
@@ -125,7 +125,7 @@ namespace EmployeeMvc.Controllers
                         .Where(r => r.Name == AppRoles.Employee)
                         .Select(r => r.Id);
 
-                    // Admins can add only Employees who are not attached to another owner's group.
+
                     candidatesQuery = candidatesQuery
                         .Where(u => _context.UserRoles.Any(ur => ur.UserId == u.Id && employeeRoleIds.Contains(ur.RoleId)))
                         .Where(u => !_context.GroupMembers.Any(m => m.UserId == u.Id &&
@@ -145,7 +145,7 @@ namespace EmployeeMvc.Controllers
             return View(vm);
         }
 
-        // ---------- შექმნა (Admin, Manager) ----------
+
         [Authorize(Roles = AppRoles.AdminOrManager)]
         public IActionResult Create()
         {
@@ -165,7 +165,7 @@ namespace EmployeeMvc.Controllers
         {
             model.CanChooseOwner = false;
 
-            // New groups always belong to the user creating them.
+
             var ownerId = _userManager.GetUserId(User);
 
             if (!ModelState.IsValid || !await IsValidOwnerAsync(ownerId))
@@ -189,7 +189,7 @@ namespace EmployeeMvc.Controllers
             return RedirectToAction(nameof(Details), new { id = group.Id });
         }
 
-        // ---------- რედაქტირება (Admin ან ჯგუფის მფლობელი Manager) ----------
+
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null) return NotFound();
@@ -231,7 +231,7 @@ namespace EmployeeMvc.Controllers
 
             model.CanChooseOwner = IsAdmin;
 
-            // მფლობელის შეცვლა მხოლოდ Admin-ს შეუძლია.
+
             var newOwnerId = IsAdmin && !string.IsNullOrEmpty(model.OwnerId) ? model.OwnerId! : group.OwnerId;
             var ownerChanged = newOwnerId != group.OwnerId;
 
@@ -249,7 +249,7 @@ namespace EmployeeMvc.Controllers
             {
                 group.OwnerId = newOwnerId;
 
-                // ახალი მფლობელი წევრთა სიაში აღარ უნდა დუბლირდებოდეს.
+
                 var duplicate = group.Members.FirstOrDefault(m => m.UserId == newOwnerId);
                 if (duplicate != null) _context.GroupMembers.Remove(duplicate);
             }
@@ -261,7 +261,7 @@ namespace EmployeeMvc.Controllers
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        // ---------- წაშლა ----------
+
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null) return NotFound();
@@ -289,14 +289,14 @@ namespace EmployeeMvc.Controllers
                 return Forbid();
             }
 
-            _context.Groups.Remove(group); // GroupMembers cascade-ით იშლება
+            _context.Groups.Remove(group); 
             await _context.SaveChangesAsync();
 
             TempData["GroupSuccess"] = "ჯგუფი წაიშალა.";
             return RedirectToAction(nameof(Index));
         }
 
-        // ---------- წევრის დამატება / წაშლა ----------
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddMember(int groupId, string? userId)
@@ -354,7 +354,7 @@ namespace EmployeeMvc.Controllers
             }
             catch (DbUpdateException)
             {
-                // პარალელური მოთხოვნა: composite PK (GroupId, UserId) დუბლიკატს ბაზის დონეზე ბლოკავს.
+
                 TempData["GroupError"] = "ეს მომხმარებელი უკვე ჯგუფშია.";
             }
 
@@ -387,7 +387,7 @@ namespace EmployeeMvc.Controllers
             return RedirectToAction(nameof(Details), new { id = groupId });
         }
 
-        // ---------- helpers ----------
+
 
         private Task<Group?> LoadGroupAsync(int id) =>
             _context.Groups

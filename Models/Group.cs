@@ -16,7 +16,7 @@ namespace EmployeeMvc.Models
         [Display(Name = "აღწერა")]
         public string? Description { get; set; }
 
-        /// <summary>ჯგუფის მფლობელი (Manager ან Admin) — FK AspNetUsers-ზე.</summary>
+
         [Required]
         public string OwnerId { get; set; } = string.Empty;
 

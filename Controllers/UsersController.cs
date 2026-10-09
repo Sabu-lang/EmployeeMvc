@@ -7,7 +7,7 @@ using EmployeeMvc.Models;
 
 namespace EmployeeMvc.Controllers
 {
-    /// <summary>მომხმარებლებისა და როლების მართვა — მხოლოდ Admin.</summary>
+
     [Authorize(Roles = AppRoles.Admin)]
     public class UsersController : Controller
     {
@@ -144,11 +144,11 @@ namespace EmployeeMvc.Controllers
 
             if (!isSelf)
             {
-                // თითოეულ თანამშრომლის ანგარიშს ერთ-ერთი საბაზო როლი აქვს.
+
                 desired = new List<string> { desired[0] };
             }
 
-            // Admin-ს საკუთარი Admin როლის ჩამოშორება ეკრძალება — სისტემა Admin-ის გარეშე არ უნდა დარჩეს.
+
             if (user.Id == _userManager.GetUserId(User) && !desired.Contains(AppRoles.Admin))
             {
                 TempData["UserError"] = "საკუთარ თავს Admin როლს ვერ ჩამოაშორებთ.";
@@ -160,7 +160,7 @@ namespace EmployeeMvc.Controllers
             var toAdd = desired.Except(current).ToList();
             var toRemove = current.Except(desired).ToList();
 
-            // ჯერ ახალი როლი დაემატოს, რათა შეცდომისას მომხმარებელი როლის გარეშე არ დარჩეს.
+
             if (toAdd.Count > 0)
             {
                 var added = await _userManager.AddToRolesAsync(user, toAdd);
@@ -181,10 +181,10 @@ namespace EmployeeMvc.Controllers
                 }
             }
 
-            // ძველი სესიების role claim-ები გაუქმდეს.
+
             await _userManager.UpdateSecurityStampAsync(user);
 
-            // თუ Admin საკუთარ როლებს ცვლის, მიმდინარე სესია განვაახლოთ, რომ არ გავიდეს სისტემიდან.
+
             if (user.Id == _userManager.GetUserId(User))
             {
                 await _signInManager.RefreshSignInAsync(user);
@@ -215,7 +215,7 @@ namespace EmployeeMvc.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var result = await _userManager.DeleteAsync(user); // GroupMembers cascade-ით იშლება
+            var result = await _userManager.DeleteAsync(user); 
             if (result.Succeeded)
             {
                 var linkedEmployee = await _context.Employees
@@ -274,8 +274,8 @@ namespace EmployeeMvc.Controllers
                     _context.Groups.Any(g => g.Id == m.GroupId && g.OwnerId == currentAdminId));
             }
 
-            // ჯერ ჯგუფში არმყოფი მომხმარებლის მართვა, მათ შორის Admin როლის მინიჭება,
-            // მხოლოდ დადასტურებული ელფოსტით არის დაშვებული.
+
+
             return user.EmailConfirmed;
         }
 

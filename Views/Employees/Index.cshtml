@@ -3,8 +3,9 @@
 @{
     ViewData["Title"] = "თანამშრომლები";
 
-    // UI-ს მხოლოდ ვამარტივებთ; რეალური შემოწმება კონტროლერებშია (server-side).
+
     var canManage = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager);
+    var isManager = User.IsInRole(AppRoles.Manager) && !User.IsInRole(AppRoles.Admin);
     var isStaff = canManage || User.IsInRole(AppRoles.Support);
     var currentEmployeeId = ViewData["CurrentEmployeeId"] as int?;
 }
@@ -13,9 +14,14 @@
     <h1 class="mb-0">@(isStaff ? "თანამშრომლების სია" : "ჩემი პროფილი")</h1>
     @if (canManage)
     {
-        <a asp-action="Create" class="btn btn-primary">
-            <i class="bi bi-plus-circle me-1"></i>ახალი თანამშრომელი
-        </a>
+        <div class="d-flex gap-2">
+            <button type="button" id="openBulkTaskModal" class="btn btn-outline-primary" disabled>
+                <i class="bi bi-clipboard-check me-1"></i>დავალების მინიჭება (<span id="selectedEmployeeCount">0</span>)
+            </button>
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-1"></i>ახალი თანამშრომელი
+            </a>
+        </div>
     }
 </div>
 
@@ -59,7 +65,7 @@
     {
         <p class="text-muted text-center py-5">
             თქვენს ანგარიშზე მიბმული თანამშრომლის ჩანაწერი ვერ მოიძებნა.
-            ჩანაწერი მიება დადასტურებული ელფოსტით — მიმართეთ ადმინისტრატორს.
+            ანგარიშის ან ჯგუფის ჩანაწერის შესამოწმებლად მიმართეთ ადმინისტრატორს.
         </p>
     }
     else
@@ -73,6 +79,15 @@ else
         @foreach (var item in Model)
         {
             <div class="employee-card">
+                @if (canManage && (!isManager || currentEmployeeId != item.Id))
+                {
+                    <div class="form-check text-start mb-2">
+                        <input class="form-check-input employee-select" type="checkbox"
+                               value="@item.Id" data-employee-name="@item.FullName"
+                               id="select-employee-@item.Id" />
+                        <label class="form-check-label small" for="select-employee-@item.Id">მონიშვნა დავალებისთვის</label>
+                    </div>
+                }
                 @if (!string.IsNullOrEmpty(item.PhotoPath))
                 {
                     <img src="@item.PhotoPath" alt="@item.FullName" class="employee-photo" />
@@ -123,12 +138,15 @@ else
                                 <i class="bi bi-arrow-repeat"></i>
                             </button>
                         </form>
-                        <button type="button" class="btn btn-sm btn-outline-primary assign-task-btn"
+                        @if (!isManager || currentEmployeeId != item.Id)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-primary assign-task-btn"
                                 title="დავალების მინიჭება"
                                 data-employee-id="@item.Id"
                                 data-employee-name="@item.FullName">
-                            <i class="bi bi-clipboard-plus"></i>
-                        </button>
+                                <i class="bi bi-clipboard-plus"></i>
+                            </button>
+                        }
                     }
                 </div>
             </div>
@@ -138,16 +156,16 @@ else
 
 @if (canManage)
 {
-@* დავალების მინიჭების Modal ფანჯარა — ერთი საერთო ყველა თანამშრომლისთვის *@
+
 <div class="modal fade" id="assignTaskModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <form asp-controller="Tasks" asp-action="Create" method="post" class="modal-content">
+        <form asp-controller="Tasks" asp-action="CreateBulk" method="post" class="modal-content" id="bulkTaskForm">
             <div class="modal-header">
-                <h5 class="modal-title">დავალების მინიჭება — <span id="modalEmployeeName"></span></h5>
+                <h5 class="modal-title">დავალების მინიჭება — <span id="modalEmployeeNames"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="დახურვა"></button>
             </div>
             <div class="modal-body">
-                <input type="hidden" name="employeeId" id="modalEmployeeId" />
+                <div id="selectedEmployeeInputs"></div>
 
                 <div class="mb-3">
                     <label class="form-label">დავალების სახელი</label>
@@ -174,15 +192,58 @@ else
 
 @section Scripts {
     <script>
-        // ღილაკზე დაჭერისას ვავსებთ Modal-ს იმ თანამშრომლის მონაცემებით
+        const selectedEmployees = () => Array.from(document.querySelectorAll('.employee-select:checked'));
+        const bulkButton = document.getElementById('openBulkTaskModal');
+        const employeeCount = document.getElementById('selectedEmployeeCount');
+        const modalElement = document.getElementById('assignTaskModal');
+        const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
+
+        function refreshSelection() {
+            if (!bulkButton) return;
+            const selected = selectedEmployees();
+            bulkButton.disabled = selected.length === 0;
+            employeeCount.textContent = selected.length;
+        }
+
+        function openAssignmentModal() {
+            const selected = selectedEmployees();
+            if (selected.length === 0) return;
+
+            const inputContainer = document.getElementById('selectedEmployeeInputs');
+            inputContainer.replaceChildren();
+            selected.forEach(checkbox => {
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'employeeIds';
+                hidden.value = checkbox.value;
+                inputContainer.appendChild(hidden);
+            });
+            const names = selected.map(checkbox => checkbox.dataset.employeeName);
+            document.getElementById('modalEmployeeNames').textContent =
+                names.length <= 3 ? names.join(', ') : `${names.length} თანამშრომელი`;
+            modal.show();
+        }
+
+        document.querySelectorAll('.employee-select').forEach(checkbox =>
+            checkbox.addEventListener('change', refreshSelection));
+        bulkButton?.addEventListener('click', openAssignmentModal);
+
+
         document.querySelectorAll('.assign-task-btn').forEach(btn => {
             btn.addEventListener('click', function () {
-                document.getElementById('modalEmployeeId').value = this.dataset.employeeId;
-                document.getElementById('modalEmployeeName').textContent = this.dataset.employeeName;
-
-                const modal = new bootstrap.Modal(document.getElementById('assignTaskModal'));
-                modal.show();
+                document.querySelectorAll('.employee-select').forEach(checkbox => {
+                    checkbox.checked = checkbox.value === this.dataset.employeeId;
+                });
+                refreshSelection();
+                openAssignmentModal();
             });
+        });
+
+        document.getElementById('bulkTaskForm')?.addEventListener('submit', event => {
+            if (selectedEmployees().length === 0) {
+                event.preventDefault();
+                alert('მონიშნეთ მინიმუმ ერთი თანამშრომელი.');
+            }
         });
     </script>
 }

@@ -4,26 +4,41 @@ using EmployeeMvc.Models;
 
 namespace EmployeeMvc.Services
 {
-    /// <summary>Limits Admin queries to employees in groups owned by that Admin.</summary>
+
     public static class EmployeeScopeExtensions
     {
-        public static IQueryable<Employee> ScopeToAdminGroups(
+        public static IQueryable<Employee> ScopeToVisibleGroups(
             this IQueryable<Employee> employees,
             ApplicationDbContext context,
             ClaimsPrincipal principal)
         {
-            if (!principal.IsInRole(AppRoles.Admin)) return employees;
+            var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return employees.Where(_ => false);
 
-            var ownerId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(ownerId)) return employees.Where(_ => false);
+            var groups = context.Groups.AsQueryable();
+            if (principal.IsInRole(AppRoles.Admin))
+            {
 
-            var memberUserIds = context.GroupMembers
-                .Where(m => context.Groups.Any(g => g.Id == m.GroupId && g.OwnerId == ownerId))
-                .Select(m => m.UserId);
+                groups = groups.Where(g => g.OwnerId == userId);
+            }
+            else
+            {
+
+                groups = groups.Where(g => g.OwnerId == userId ||
+                    g.Members.Any(m => m.UserId == userId));
+            }
+
+            var groupIds = groups.Select(g => g.Id);
+            var visibleUserIds = context.GroupMembers
+                .Where(m => groupIds.Contains(m.GroupId))
+                .Select(m => m.UserId)
+                .Union(context.Groups
+                    .Where(g => groupIds.Contains(g.Id))
+                    .Select(g => g.OwnerId));
 
             return employees.Where(e =>
-                (e.AccountId != null && memberUserIds.Contains(e.AccountId)) ||
-                context.Users.Any(u => memberUserIds.Contains(u.Id) &&
+                (e.AccountId != null && visibleUserIds.Contains(e.AccountId)) ||
+                context.Users.Any(u => visibleUserIds.Contains(u.Id) &&
                     u.Email != null && u.Email.ToLower() == e.Email.ToLower()));
         }
     }

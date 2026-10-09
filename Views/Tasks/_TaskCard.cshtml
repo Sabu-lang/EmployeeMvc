@@ -1,14 +1,24 @@
-@model TaskItem
+@model TaskBoardItemViewModel
 
-<div class="task-card" draggable="true" data-task-id="@Model.Id">
+@{
+    var currentEmployeeId = ViewData["CurrentEmployeeId"] as int?;
+    var canReview = ViewData["CanReview"] as bool? == true;
+    var canApproveSubmission = ViewData["CanApproveSubmission"] as bool? == true;
+    var latestSubmission = Model.Submissions.OrderByDescending(s => s.SubmittedAt)
+        .ThenByDescending(s => s.Id).FirstOrDefault();
+    var canDrag = canReview && Model.Status is TaskBoardStatus.ToDo or TaskBoardStatus.InProgress;
+}
+
+<div class="task-card" draggable="@(canDrag ? "true" : "false")"
+     data-task-id="@Model.Id" data-status="@((int)Model.Status)">
     <div class="task-card-title">@Model.Title</div>
     <div class="task-card-employee">
-        <i class="bi bi-person-fill me-1"></i>@(Model.Employee?.FullName ?? "უცნობი")
+        <i class="bi bi-person-fill me-1"></i>@Model.EmployeeName
     </div>
     <div class="task-card-description">@Model.Description</div>
     <div class="task-card-footer">
-        <span class="task-card-date">@Model.CreatedAt.ToString("dd.MM.yyyy")</span>
-        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager))
+        <span class="task-card-date">@Model.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</span>
+        @if (canReview)
         {
             <form asp-controller="Tasks" asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline">
                 <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="წაშლა" onclick="return confirm('წავშალო ეს დავალება?');">
@@ -17,4 +27,68 @@
             </form>
         }
     </div>
+
+    @if (Model.Submissions.Count > 0)
+    {
+        <div class="task-submissions mt-3">
+            <h6>ჩაბარებები</h6>
+            @foreach (var submission in Model.Submissions.OrderByDescending(s => s.SubmittedAt).ThenByDescending(s => s.Id))
+            {
+                <div class="border rounded p-2 mb-2">
+                    <div class="small text-muted">@submission.SubmittedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
+                    <p class="mb-2">@submission.Comment</p>
+                    <a asp-controller="Tasks" asp-action="DownloadSubmission" asp-route-id="@submission.Id"
+                       class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-download me-1"></i>@submission.FileName
+                    </a>
+                    @if (submission.ReviewedAt.HasValue)
+                    {
+                        <div class="small mt-2">
+                            შემოწმდა: @(submission.ReviewedStatus == TaskBoardStatus.Done ? "დასრულებულია" : "მიმდინარეობს")
+                            @if (!string.IsNullOrWhiteSpace(submission.ReviewComment))
+                            {
+                                <div>კომენტარი: @submission.ReviewComment</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (currentEmployeeId == Model.EmployeeId && Model.Status is not (TaskBoardStatus.Done or TaskBoardStatus.PendingReview))
+    {
+        <form asp-controller="Tasks" asp-action="Submit" method="post" enctype="multipart/form-data" class="mt-3">
+            <input type="hidden" name="taskId" value="@Model.Id" />
+            <div class="mb-2">
+                <label class="form-label small">ნამუშევრის ფაილი (მაქს. 5 MB)</label>
+                <input type="file" name="attachment" class="form-control form-control-sm" required
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.zip" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">კომენტარი</label>
+                <textarea name="comment" class="form-control form-control-sm" rows="2" maxlength="2000" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">შემოწმებაზე გაგზავნა</button>
+        </form>
+    }
+    else if (currentEmployeeId == Model.EmployeeId && Model.Status == TaskBoardStatus.PendingReview)
+    {
+        <div class="alert alert-info mt-3 mb-0">ნამუშევარი შემოწმებას ელოდება.</div>
+    }
+
+    @if (canApproveSubmission && Model.Status == TaskBoardStatus.PendingReview && latestSubmission is { ReviewedAt: null })
+    {
+        <form asp-controller="Tasks" asp-action="ReviewSubmission" method="post" class="mt-3 border-top pt-3">
+            <input type="hidden" name="submissionId" value="@latestSubmission.Id" />
+            <label class="form-label small">შემოწმების შედეგი</label>
+            <select name="decision" class="form-select form-select-sm mb-2" required>
+                <option value="1">მიმდინარეობს</option>
+                <option value="2">დასრულებულია</option>
+            </select>
+            <textarea name="reviewComment" class="form-control form-control-sm mb-2" rows="2"
+                      maxlength="2000" placeholder="კომენტარი თანამშრომლისთვის (არასავალდებულო)"></textarea>
+            <button type="submit" class="btn btn-sm btn-success">შედეგის შენახვა</button>
+        </form>
+    }
 </div>
